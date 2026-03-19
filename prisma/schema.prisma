@@ -1,0 +1,278 @@
+// PM Internal Tool - Prisma Schema
+// Aligned with Analytics Framework RFC
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum FlowType {
+  HAPPY_FLOW
+  UNHAPPY_FLOW
+}
+
+enum EventStatus {
+  DRAFT
+  READY
+  APPROVED
+}
+
+enum BehavioralEventType {
+  page_view
+  click
+  submit
+  field_change
+  error_message_view
+  error_message
+  error
+  tooltip_view
+  tooltip
+  popup_view
+  popup
+  toast
+  experiment_trigger
+}
+
+enum ApplicationEventType {
+  API_TRIGGERED
+  OFFLINE_PROCESS
+}
+
+enum CommunicationStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  DEPRECATED
+  READY_FOR_BRAZE
+}
+
+enum BrazeAvailability {
+  AVAILABLE
+  NOT_AVAILABLE
+  REGION_SPECIFIC
+}
+
+enum ChannelType {
+  INTERNAL
+  EXTERNAL
+}
+
+model Channel {
+  id                  String             @id @default(cuid())
+  name                String
+  type                ChannelType
+  brazeAvailability   BrazeAvailability
+  regionAvailability  String[]           @default([])
+  useCase             String?
+  description         String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+  governanceRules     ChannelGovernance[]
+}
+
+model ChannelGovernance {
+  id          String   @id @default(cuid())
+  channelId   String?
+  channel     Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+  title       String
+  content     String
+  category    String?
+  order       Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model SupportedService {
+  id        String   @id @default(cuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+  domains   Domain[]
+}
+
+model Domain {
+  id                      String   @id @default(cuid())
+  name                    String
+  description             String?
+  tags                    String[] @default([])
+  eventsManuallyConfirmed Boolean  @default(false)
+  selectedServiceId       String?
+  selectedService         SupportedService? @relation(fields: [selectedServiceId], references: [id], onDelete: SetNull)
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  flows                 Flow[]
+  behavioralEvents      BehavioralEvent[]
+  applicationEvents     ApplicationEvent[]
+  journeys              Journey[]
+  journeySteps          JourneyStep[]
+  communicationPoints   CommunicationPoint[]
+  communications        Communication[]
+  archiveSnapshots      ArchiveSnapshot[]
+}
+
+model Flow {
+  id        String   @id @default(cuid())
+  domainId  String
+  domain    Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  name      String
+  flowType  FlowType
+  fileUrl   String?
+  figmaLink String?
+  createdAt DateTime @default(now())
+}
+
+model BehavioralEvent {
+  id               String               @id @default(cuid())
+  domainId         String
+  domain           Domain               @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  eventName        String
+  eventType        BehavioralEventType
+  description      String?
+  status           EventStatus          @default(DRAFT)
+  userProperties   Json?
+  eventProperties  Json
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  journeyStepMappings JourneyStepBehavioralEvent[]
+}
+
+model JourneyStepBehavioralEvent {
+  journeyStepId      String
+  behavioralEventId   String
+  journeyStep         JourneyStep     @relation(fields: [journeyStepId], references: [id], onDelete: Cascade)
+  behavioralEvent     BehavioralEvent @relation(fields: [behavioralEventId], references: [id], onDelete: Cascade)
+
+  @@id([journeyStepId, behavioralEventId])
+}
+
+model ApplicationEvent {
+  id               String              @id @default(cuid())
+  domainId         String
+  domain           Domain              @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  eventName        String
+  description      String?
+  eventType        ApplicationEventType
+  status           EventStatus         @default(DRAFT)
+  handshakeContext Json
+  businessRationale Json?
+  producerMetadata Json?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  journeyStepMappings JourneyStepApplicationEvent[]
+}
+
+model JourneyStepApplicationEvent {
+  journeyStepId       String
+  applicationEventId  String
+  journeyStep         JourneyStep      @relation(fields: [journeyStepId], references: [id], onDelete: Cascade)
+  applicationEvent    ApplicationEvent @relation(fields: [applicationEventId], references: [id], onDelete: Cascade)
+
+  @@id([journeyStepId, applicationEventId])
+}
+
+model Journey {
+  id          String   @id @default(cuid())
+  domainId    String
+  domain      Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  coverImage  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  steps JourneyStep[]
+}
+
+model JourneyStep {
+  id          String   @id @default(cuid())
+  domainId    String
+  domain      Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  journeyId   String?
+  journey     Journey? @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  flowIndex   Int      @default(0)
+  order       Int
+  name        String
+  description String?
+  posX        Float    @default(0)
+  posY        Float    @default(0)
+  imageUrl    String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  behavioralEvents    JourneyStepBehavioralEvent[]
+  applicationEvents   JourneyStepApplicationEvent[]
+  communicationPoints CommunicationPoint[]
+}
+
+model CommunicationPoint {
+  id             String   @id @default(cuid())
+  domainId       String
+  domain         Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  journeyStepId  String?
+  journeyStep    JourneyStep? @relation(fields: [journeyStepId], references: [id], onDelete: SetNull)
+  name           String
+  triggerEvent   String?
+  conditions     Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  communication Communication?
+}
+
+model Communication {
+  id                    String              @id @default(cuid())
+  domainId              String
+  domain                Domain              @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  communicationPointId  String?             @unique
+  communicationPoint    CommunicationPoint? @relation(fields: [communicationPointId], references: [id], onDelete: SetNull)
+  templateId            String?
+  template              CommunicationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  name                  String              @default("Untitled")
+  contentOutline        Json?
+  description           String?
+  tags                  String[]            @default([])
+  approvalCategory      String?
+  owner                 String?
+  status                CommunicationStatus @default(DRAFT)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+}
+
+model BehavioralTaxonomyType {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  name        String
+  description String?
+}
+
+model CommunicationTemplate {
+  id             String         @id @default(cuid())
+  channel        String
+  category       String?
+  name           String
+  description    String?
+  communications Communication[]
+}
+
+model QuestionBankItem {
+  id          String   @id @default(cuid())
+  question    String
+  category    String?
+  dimension   String?
+}
+
+model ArchiveSnapshot {
+  id        String   @id @default(cuid())
+  domainId  String
+  domain    Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  author    String?
+  snapshot  Json
+  createdAt DateTime @default(now())
+}

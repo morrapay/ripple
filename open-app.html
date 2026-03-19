@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ripple — Open App</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background: #0f0f12;
+      color: #e8e6e3;
+    }
+    h1 { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    p { color: #a1a1aa; font-size: 0.9rem; margin-bottom: 1.5rem; }
+    a {
+      display: inline-block;
+      padding: 14px 32px;
+      background: #6366f1;
+      color: white;
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 1.1rem;
+      border-radius: 8px;
+      transition: background 0.2s;
+    }
+    a:hover { background: #4f46e5; }
+    .url { margin-top: 1rem; font-size: 0.85rem; color: #71717a; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h1>Ripple</h1>
+  <p>Open the app in your browser</p>
+  <a href="http://localhost:3005" target="_blank">Open Ripple</a>
+  <p class="url">http://localhost:3005</p>
+  <p style="margin-top: 2rem; font-size: 0.8rem;">Run <code>npm run dev</code> first if the app doesn't load.</p>
+</body>
+</html>
