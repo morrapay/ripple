@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 
 export async function listJourneysByDomain(domainId: string) {
   return prisma.journey.findMany({
@@ -35,13 +36,15 @@ export async function getJourneyById(id: string, domainId: string) {
 
 export async function createJourney(
   domainId: string,
-  input: { name: string; description?: string }
+  input: { name: string; description?: string; audience?: string; objective?: string }
 ) {
   return prisma.journey.create({
     data: {
       domainId,
       name: input.name,
       description: input.description ?? null,
+      audience: input.audience ?? null,
+      objective: input.objective ?? null,
     },
   });
 }
@@ -49,7 +52,15 @@ export async function createJourney(
 export async function updateJourney(
   id: string,
   domainId: string,
-  input: { name?: string; description?: string; coverImage?: string }
+  input: {
+    name?: string;
+    description?: string;
+    audience?: string;
+    objective?: string;
+    coverImage?: string;
+    entryCriteria?: Record<string, unknown>;
+    exitCriteria?: Record<string, unknown>;
+  }
 ) {
   const journey = await prisma.journey.findFirst({ where: { id, domainId } });
   if (!journey) return null;
@@ -59,7 +70,11 @@ export async function updateJourney(
     data: {
       ...(input.name !== undefined && { name: input.name }),
       ...(input.description !== undefined && { description: input.description }),
+      ...(input.audience !== undefined && { audience: input.audience }),
+      ...(input.objective !== undefined && { objective: input.objective }),
       ...(input.coverImage !== undefined && { coverImage: input.coverImage }),
+      ...(input.entryCriteria !== undefined && { entryCriteria: input.entryCriteria as Prisma.InputJsonValue }),
+      ...(input.exitCriteria !== undefined && { exitCriteria: input.exitCriteria as Prisma.InputJsonValue }),
     },
   });
 }

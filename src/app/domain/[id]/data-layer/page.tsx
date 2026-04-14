@@ -4,6 +4,7 @@ import { getDomainProgress } from "@/lib/services/progress";
 import { ProgressStepper } from "@/components/progress-stepper";
 import { DataLayerGuide } from "@/components/data-layer-guide";
 import { DataLayerInput } from "@/components/data-layer-input";
+import { ApprovalBar } from "@/components/approval-bar";
 
 export default async function DataLayerPage({
   params,
@@ -24,6 +25,8 @@ export default async function DataLayerPage({
       <p className="text-zinc-400 text-sm mb-6">
         Define events for {domain.name} — the system generates behavioral and application events from your inputs.
       </p>
+
+      <ApprovalBar domainId={id} hasEvents={progress.hasEvents} />
 
       <ProgressStepper
         domainId={id}

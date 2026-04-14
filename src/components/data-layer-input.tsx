@@ -155,6 +155,28 @@ export function DataLayerInput({ domainId }: { domainId: string }) {
   const [newCommWhen, setNewCommWhen] = useState("");
   const [newCommChannels, setNewCommChannels] = useState<string[]>([]);
 
+  const persistContext = useCallback(async (ctx: GenerationContext) => {
+    try {
+      await fetch(`/api/domains/${domainId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ generationContext: ctx }),
+      });
+    } catch {
+      /* best-effort persistence */
+    }
+  }, [domainId]);
+
+  /* Auto-persist context edits (add/remove chips) with debounce */
+  useEffect(() => {
+    if (!generationContext || !contextDirty) return;
+    const timer = setTimeout(() => {
+      persistContext(generationContext);
+      setSavedContextJSON(JSON.stringify(generationContext));
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [generationContext, contextDirty, persistContext]);
+
   /* ── Fetch existing data ────────────────────────── */
 
   useEffect(() => {
@@ -165,17 +187,17 @@ export function DataLayerInput({ domainId }: { domainId: string }) {
     }
     (async () => {
       try {
-        const [flowsRes, beRes, aeRes] = await Promise.all([
-          fetch(`/api/domains/${domainId}/flows`),
+        const [domainRes, beRes, aeRes] = await Promise.all([
+          fetch(`/api/domains/${domainId}`),
           fetch(`/api/domains/${domainId}/behavioral-events`),
           fetch(`/api/domains/${domainId}/application-events`),
         ]);
-        const flowsData = await flowsRes.json();
+        const domainData = await domainRes.json();
         const beData = await beRes.json();
         const aeData = await aeRes.json();
 
-        if (!flowsRes.ok) {
-          setError(typeof flowsData?.error === "string" ? flowsData.error : "Failed to load flows");
+        if (!domainRes.ok) {
+          setError(typeof domainData?.error === "string" ? domainData.error : "Failed to load domain");
           return;
         }
         if (!beRes.ok) {
@@ -187,13 +209,12 @@ export function DataLayerInput({ domainId }: { domainId: string }) {
           return;
         }
 
-        const flows = (flowsData.flows ?? []) as {
-          id: string;
-          name: string;
-          figmaLink: string | null;
-          fileUrl: string | null;
-        }[];
-        setScreens(flows.map((f) => ({ id: f.id, name: f.name, figmaLink: f.figmaLink, fileUrl: f.fileUrl })));
+        const savedCtx = domainData.domain?.generationContext as GenerationContext | null;
+        if (savedCtx) {
+          setGenerationContext(savedCtx);
+          setSavedContextJSON(JSON.stringify(savedCtx));
+        }
+
         setBehavioralEvents(beData.events ?? []);
         setApplicationEvents(aeData.events ?? []);
       } catch (err) {
@@ -462,7 +483,7 @@ export function DataLayerInput({ domainId }: { domainId: string }) {
       for (const e of allAe) if (!previousNames.has(e.eventName)) freshNames.add(e.eventName);
       setNewEventNames(freshNames);
 
-      /* Merge new inputs into cumulative context */
+      /* Merge new inputs into cumulative context and persist */
       setGenerationContext((prev) => {
         const prevScreens = prev?.screens ?? [];
         const prevQuestions = prev?.businessQuestions ?? [];
@@ -487,6 +508,7 @@ export function DataLayerInput({ domainId }: { domainId: string }) {
           ],
         };
         setSavedContextJSON(JSON.stringify(merged));
+        persistContext(merged);
         return merged;
       });
       setScreens([]);
@@ -649,6 +671,7 @@ export function DataLayerInput({ domainId }: { domainId: string }) {
       setNewEventNames(freshNames);
 
       setSavedContextJSON(JSON.stringify(ctx));
+      persistContext(ctx);
       setSuccessMessage(
         `Regenerated ${behavioralSuggestions.length + applicationSuggestions.length} events.`
       );
@@ -725,7 +748,7 @@ export function DataLayerInput({ domainId }: { domainId: string }) {
   /* ── Render ─────────────────────────────────────── */
 
   return (
-    <div className="space-y-8 relative">
+    <div id="data-layer-input" className="space-y-8 relative">
       {/* Loading overlay */}
       {isBusy && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-950/80 backdrop-blur-sm">

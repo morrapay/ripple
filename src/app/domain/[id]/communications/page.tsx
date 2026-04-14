@@ -17,12 +17,11 @@ export default async function CommunicationsPage({
 
   return (
     <div>
-      <h1 className="text-2xl font-semibold text-[var(--foreground)] mb-2">
+      <h1 className="text-xl font-semibold text-[var(--foreground)] mb-2">
         Communications
       </h1>
       <p className="text-zinc-400 text-sm mb-6">
-        View, manage, and govern all internal product communications for this
-        domain.
+        Classify, manage content, and preview communications triggered from the journey mapping area.
       </p>
 
       <ProgressStepper

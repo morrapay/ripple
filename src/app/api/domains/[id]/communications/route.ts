@@ -5,6 +5,7 @@ import {
   listCommunicationPointsWithoutCommunication,
 } from "@/lib/services/communication";
 import { getDomainById } from "@/lib/services/domain";
+import { logAudit } from "@/lib/services/audit";
 
 export async function GET(
   request: NextRequest,
@@ -71,9 +72,21 @@ export async function POST(
       description: body.description,
       communicationPointId: body.communicationPointId,
       templateId: body.templateId,
+      channel: body.channel,
+      communicationType: body.communicationType,
+      category: body.category,
+      preferenceGroup: body.preferenceGroup,
       tags: body.tags ?? [],
       owner: body.owner,
       status: body.status,
+    });
+
+    await logAudit({
+      domainId: id,
+      entityType: "COMMUNICATION",
+      entityId: communication.id,
+      action: "CREATE",
+      changes: body,
     });
 
     return NextResponse.json({ communication });

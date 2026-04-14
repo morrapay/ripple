@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 
-export type JourneyStepKind = "ACTION" | "SYSTEM_TRIGGER" | "COMMUNICATION" | "STATE";
+export type JourneyStepKind = "ACTION" | "SYSTEM_TRIGGER" | "COMMUNICATION" | "STATE" | "DECISION" | "WAIT_DELAY" | "AB_SPLIT";
 
 export interface CreateJourneyStepInput {
   name: string;
@@ -14,12 +15,13 @@ export interface CreateJourneyStepInput {
   applicationEventId?: string;
   communicationPointName?: string;
   triggerEvent?: string;
+  insertAfterOrder?: number;
 }
 
 export interface UpdateJourneyStepInput {
   name?: string;
   description?: string;
-  kind?: JourneyStepKind;
+  kind?: string;
   order?: number;
   posX?: number;
   posY?: number;
@@ -28,6 +30,9 @@ export interface UpdateJourneyStepInput {
   applicationEventId?: string | null;
   communicationPointName?: string;
   triggerEvent?: string;
+  conditionConfig?: Record<string, unknown>;
+  waitDuration?: string;
+  splitVariants?: { name: string; percentage: number }[];
 }
 
 export async function listJourneyStepsByDomain(domainId: string) {
@@ -69,17 +74,29 @@ export async function createJourneyStep(
   domainId: string,
   input: CreateJourneyStepInput
 ) {
-  const maxOrder = await prisma.journeyStep
-    .aggregate({ where: { domainId }, _max: { order: true } })
-    .then((r) => r._max.order ?? -1);
+  let newOrder: number;
+
+  if (input.insertAfterOrder !== undefined) {
+    await prisma.journeyStep.updateMany({
+      where: { domainId, order: { gt: input.insertAfterOrder } },
+      data: { order: { increment: 1 } },
+    });
+    newOrder = input.insertAfterOrder + 1;
+  } else {
+    const maxOrder = await prisma.journeyStep
+      .aggregate({ where: { domainId }, _max: { order: true } })
+      .then((r) => r._max.order ?? -1);
+    newOrder = maxOrder + 1;
+  }
 
   const step = await prisma.journeyStep.create({
     data: {
       domainId,
       journeyId: input.journeyId ?? null,
-      order: maxOrder + 1,
+      order: newOrder,
       name: input.name,
       description: input.description ?? null,
+      kind: input.kind ?? "STATE",
       posX: input.posX ?? 0,
       posY: input.posY ?? 0,
       imageUrl: input.imageUrl ?? null,
@@ -105,12 +122,20 @@ export async function createJourneyStep(
   }
 
   if (input.kind === "COMMUNICATION" && input.communicationPointName) {
-    await prisma.communicationPoint.create({
+    const cp = await prisma.communicationPoint.create({
       data: {
         domainId,
         journeyStepId: step.id,
         name: input.communicationPointName,
         triggerEvent: input.triggerEvent ?? null,
+      },
+    });
+    await prisma.communication.create({
+      data: {
+        domainId,
+        communicationPointId: cp.id,
+        name: input.communicationPointName,
+        status: "DRAFT",
       },
     });
   }
@@ -156,9 +181,13 @@ export async function updateJourneyStep(
     data: {
       ...(input.name !== undefined && { name: input.name }),
       ...(input.description !== undefined && { description: input.description }),
+      ...(input.kind !== undefined && { kind: input.kind }),
       ...(input.posX !== undefined && { posX: input.posX }),
       ...(input.posY !== undefined && { posY: input.posY }),
       ...(input.imageUrl !== undefined && { imageUrl: input.imageUrl }),
+      ...(input.conditionConfig !== undefined && { conditionConfig: input.conditionConfig as unknown as Prisma.InputJsonValue }),
+      ...(input.waitDuration !== undefined && { waitDuration: input.waitDuration }),
+      ...(input.splitVariants !== undefined && { splitVariants: input.splitVariants as unknown as Prisma.InputJsonValue }),
     },
   });
 
@@ -192,10 +221,18 @@ export async function updateJourneyStep(
   }
 
   if (input.kind && input.kind !== "COMMUNICATION") {
-    // Switching away from COMMUNICATION — remove any linked communication points
-    await prisma.communicationPoint.deleteMany({
+    const pointsToRemove = await prisma.communicationPoint.findMany({
       where: { journeyStepId: id },
+      select: { id: true },
     });
+    if (pointsToRemove.length > 0) {
+      await prisma.communication.deleteMany({
+        where: { communicationPointId: { in: pointsToRemove.map((p) => p.id) } },
+      });
+      await prisma.communicationPoint.deleteMany({
+        where: { journeyStepId: id },
+      });
+    }
   } else if (
     input.kind === "COMMUNICATION" &&
     (input.communicationPointName !== undefined || input.triggerEvent !== undefined)
@@ -214,12 +251,20 @@ export async function updateJourneyStep(
         },
       });
     } else if (input.communicationPointName) {
-      await prisma.communicationPoint.create({
+      const newCp = await prisma.communicationPoint.create({
         data: {
           domainId,
           journeyStepId: id,
           name: input.communicationPointName,
           triggerEvent: input.triggerEvent ?? null,
+        },
+      });
+      await prisma.communication.create({
+        data: {
+          domainId,
+          communicationPointId: newCp.id,
+          name: input.communicationPointName,
+          status: "DRAFT",
         },
       });
     }
@@ -235,6 +280,20 @@ export async function deleteJourneyStep(id: string, domainId: string) {
   });
   const idx = steps.findIndex((s) => s.id === id);
   if (idx < 0) return null;
+
+  // Explicitly remove child records to avoid FK constraint issues
+  await prisma.journeyStepBehavioralEvent.deleteMany({ where: { journeyStepId: id } });
+  await prisma.journeyStepApplicationEvent.deleteMany({ where: { journeyStepId: id } });
+
+  const points = await prisma.communicationPoint.findMany({
+    where: { journeyStepId: id },
+    select: { id: true },
+  });
+  if (points.length > 0) {
+    const pointIds = points.map((p) => p.id);
+    await prisma.communication.deleteMany({ where: { communicationPointId: { in: pointIds } } });
+    await prisma.communicationPoint.deleteMany({ where: { journeyStepId: id } });
+  }
 
   await prisma.journeyStep.delete({ where: { id } });
 

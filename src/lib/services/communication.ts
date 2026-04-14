@@ -18,11 +18,17 @@ export interface ListCommunicationsInput {
   sortOrder?: "asc" | "desc";
 }
 
+export type CommunicationType = "PROMOTIONAL" | "TRANSACTIONAL" | "OPERATIONAL";
+
 export interface CreateCommunicationInput {
   name: string;
   description?: string;
   communicationPointId?: string;
   templateId?: string;
+  channel?: string;
+  communicationType?: CommunicationType;
+  category?: string;
+  preferenceGroup?: string;
   tags?: string[];
   owner?: string;
   status?: CommunicationStatus;
@@ -32,6 +38,11 @@ export interface UpdateCommunicationInput {
   name?: string;
   description?: string;
   templateId?: string;
+  channel?: string;
+  communicationType?: CommunicationType | null;
+  category?: string | null;
+  preferenceGroup?: string | null;
+  preferenceCategories?: string[];
   tags?: string[];
   owner?: string;
   status?: CommunicationStatus;
@@ -73,7 +84,7 @@ export async function listCommunications(input: ListCommunicationsInput) {
   }
 
   if (channel) {
-    where.template = { channel: { equals: channel, mode: "insensitive" } };
+    where.channel = { equals: channel, mode: "insensitive" };
   }
 
   if (status) {
@@ -140,6 +151,10 @@ export async function createCommunication(
       description: input.description ?? null,
       communicationPointId: input.communicationPointId ?? null,
       templateId: input.templateId ?? null,
+      channel: input.channel ?? null,
+      communicationType: input.communicationType ?? null,
+      category: input.category ?? null,
+      preferenceGroup: input.preferenceGroup ?? null,
       tags: input.tags ?? [],
       owner: input.owner ?? null,
       status: (input.status ?? "DRAFT") as "DRAFT" | "ACTIVE" | "PAUSED" | "DEPRECATED" | "READY_FOR_BRAZE",
@@ -163,6 +178,11 @@ export async function updateCommunication(
       ...(input.name !== undefined && { name: input.name }),
       ...(input.description !== undefined && { description: input.description }),
       ...(input.templateId !== undefined && { templateId: input.templateId }),
+      ...(input.channel !== undefined && { channel: input.channel }),
+      ...(input.communicationType !== undefined && { communicationType: input.communicationType }),
+      ...(input.category !== undefined && { category: input.category }),
+      ...(input.preferenceGroup !== undefined && { preferenceGroup: input.preferenceGroup }),
+      ...(input.preferenceCategories !== undefined && { preferenceCategories: input.preferenceCategories }),
       ...(input.tags !== undefined && { tags: input.tags }),
       ...(input.owner !== undefined && { owner: input.owner }),
       ...(input.status !== undefined && {

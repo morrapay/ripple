@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import { getDomainById } from "@/lib/services/domain";
 import { getDomainProgress } from "@/lib/services/progress";
-import { ProgressStepper } from "@/components/progress-stepper";
-import { DashboardCounters } from "@/components/dashboard-counters";
-import { PrerequisiteAlert } from "@/components/prerequisite-alert";
+import { PhaseChecklist } from "@/components/phase-checklist";
+import { NextActionBanner } from "@/components/next-action-banner";
+import { StatusBoard } from "@/components/dashboard-status-board";
+import { getSessionUser } from "@/lib/get-session";
 
 export default async function DomainDashboardPage({
   params,
@@ -14,7 +15,10 @@ export default async function DomainDashboardPage({
   const domain = await getDomainById(id);
   if (!domain) notFound();
 
-  const progress = await getDomainProgress(id);
+  const [progress, user] = await Promise.all([
+    getDomainProgress(id),
+    getSessionUser(),
+  ]);
 
   return (
     <div>
@@ -25,25 +29,11 @@ export default async function DomainDashboardPage({
         {domain.description ?? "No description"}
       </p>
 
-      <ProgressStepper
-        domainId={id}
-        currentStep="dashboard"
-        canProceedToMapping={progress.canProceedToMapping}
-      />
+      <PhaseChecklist domainId={id} progress={progress} />
+      <NextActionBanner domainId={id} progress={progress} role={user?.role} />
 
-      <PrerequisiteAlert
-        canProceedToMapping={progress.canProceedToMapping}
-        figmaFlowsHappy={progress.figmaFlowsHappy}
-        figmaFlowsUnhappy={progress.figmaFlowsUnhappy}
-        hasEvents={
-          progress.behavioralEventsTotal > 0 || progress.applicationEventsTotal > 0
-        }
-      />
-
-      <h2 className="text-lg font-medium text-[var(--foreground)] mb-4">
-        Progress
-      </h2>
-      <DashboardCounters domainId={id} progress={progress} />
+      <h2 className="text-lg font-medium text-[var(--foreground)] mb-4">Status</h2>
+      <StatusBoard domainId={id} progress={progress} />
     </div>
   );
 }

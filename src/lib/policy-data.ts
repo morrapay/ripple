@@ -389,15 +389,16 @@ export const POLICY_CHANNELS: PolicyChannel[] = [
     id: "tour-guide",
     name: "Tour Guide / Tooltip",
     category: "in-app",
-    status: "planned",
+    status: "production",
     brazeAvailable: false,
+    brazeNote: "Standalone reusable component — not governed via Braze. Future integration planned with A/B testing, queuing, and expiration.",
     devices: ["Web"],
     context: "Flow-oriented (page elements)",
     intent: "Adoption / Activation",
     techOwner: "FEF",
     opsOwner: "Account / PLG (Platform)",
     description:
-      "Awareness tool for new capabilities or features. Step-by-step contextual tours tied to specific page elements. Planned via UserPilot.",
+      "Reusable in-app component for contextual step-by-step tours tied to page elements. Currently standalone (not governed). Future plans include A/B testing, queuing, and expiration via an integrated tour management tool.",
     messaging: {
       allowed: [
         "Upsell / Cross-sell new capabilities",
@@ -673,6 +674,24 @@ export const ALERT_COMBINATIONS = [
   { alert: "Warning", shownAlongside: "Informational" },
   { alert: "Informational", shownAlongside: "Warning or Success" },
   { alert: "Success", shownAlongside: "Informational" },
+];
+
+export interface GovernanceRule {
+  title: string;
+  content: string;
+}
+
+export const GOVERNANCE_RULES: GovernanceRule[] = [
+  { title: "One Jumbotron per session", content: "Only one Jumbotron banner is displayed per user session. Jumbotrons are strictly promotional — not for alerts or operational messages. Priority is set by Marketing." },
+  { title: "Alert severity hierarchy", content: "Alerts follow a severity hierarchy: Critical > Warning > Informational > Success. Critical alerts are shown alone; Warning can coexist with Informational; Informational can coexist with Warning or Success." },
+  { title: "No promotional content in alerts", content: "Alert channels (In-Product Alert, Notification Center) must never be used for promotional messaging, upsell, or marketing. They are reserved for operational, compliance, and transactional messages." },
+  { title: "Cool-off periods", content: "Each alert severity has a cool-off period: Critical = 0 (immediate), Warning = 24h, Informational = 48h, Success = 72h. Users cannot receive the same alert type within the cool-off window." },
+  { title: "Email frequency", content: "Marketing emails: max 2 per week per user. Transactional/operational emails have no cap but must be event-driven, not batch-sent." },
+  { title: "SMS & WhatsApp opt-in required", content: "SMS and WhatsApp require explicit user opt-in. Messages must include opt-out instructions. No promotional SMS/WhatsApp without consent." },
+  { title: "Frozen channels", content: "Notification Center & In-Product Alerts are currently frozen until migration to Braze is complete. No new implementations on these channels." },
+  { title: "Tour Guide standalone", content: "Tour Guide is in production as a reusable standalone UI component. It currently lacks queueing, expiration, and A/B testing. Future plans include integration with a more robust tour management tool that adds these capabilities." },
+  { title: "Cross-channel coordination", content: "When a communication spans multiple channels (e.g., email + in-app alert), ensure consistent messaging and avoid duplicate notifications within the same session." },
+  { title: "Content ownership", content: "Promotional content is owned by Marketing. Operational/transactional content is owned by Product. Alert content must be approved by both Product and Compliance." },
 ];
 
 export const USE_CASES = [

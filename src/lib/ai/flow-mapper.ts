@@ -18,6 +18,47 @@ function toSlug(text: string): string {
     .toLowerCase();
 }
 
+function humanizeName(eventName: string, eventType: string): string {
+  const typeLabels: Record<string, string> = {
+    page_view: "Page View",
+    click: "Click",
+    submit: "Submit",
+    field_change: "Field Change",
+    error_message_view: "Error Displayed",
+    error_message: "Error",
+    error: "Error",
+    tooltip_view: "Tooltip Shown",
+    tooltip: "Tooltip",
+    popup_view: "Popup Shown",
+    popup: "Popup",
+    toast: "Toast",
+    experiment_trigger: "Experiment",
+    api_response: "API Response",
+    state_change: "State Change",
+    navigation: "Navigation",
+    webhook: "Webhook",
+    scheduler: "Scheduled",
+  };
+  const label = typeLabels[eventType] ?? eventType.replace(/_/g, " ");
+
+  let context = eventName;
+  const suffixes = [
+    `_${eventType}`, "_page_view", "_click", "_submit", "_error_message_view",
+    "_error_message", "_error", "_tooltip_view", "_popup_view", "_toast",
+    "_field_change", "_experiment_trigger", "_api_response", "_state_change",
+    "_navigation", "_webhook", "_scheduler",
+  ];
+  for (const s of suffixes) {
+    if (context.endsWith(s)) {
+      context = context.slice(0, -s.length);
+      break;
+    }
+  }
+  context = context.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()).trim();
+
+  return context ? `${context} — ${label}` : label;
+}
+
 function normalizeForMatch(text: string): string {
   return text
     .toLowerCase()
@@ -133,7 +174,6 @@ export function mapFlowToJourneySteps(
       (e) => eventMatchesFlow(e.eventName, slug) && !addedBehavioralIds.has(e.id)
     );
 
-    // Add events in the natural interaction order within this screen
     for (const eventType of BEHAVIORAL_ORDER) {
       const ev = flowEvents.find(
         (e) =>
@@ -144,54 +184,54 @@ export function mapFlowToJourneySteps(
         addedBehavioralIds.add(ev.id);
         steps.push({
           kind: "ACTION",
-          name: ev.eventName,
+          name: humanizeName(ev.eventName, ev.eventType),
           description: ev.description ?? undefined,
           order: order++,
           screenIndex,
           behavioralEventId: ev.id,
+          triggerEvent: ev.eventName,
         });
       }
     }
 
-    // Any remaining events for this screen not caught by the standard order
     for (const ev of flowEvents) {
       if (!addedBehavioralIds.has(ev.id)) {
         addedBehavioralIds.add(ev.id);
         steps.push({
           kind: "ACTION",
-          name: ev.eventName,
+          name: humanizeName(ev.eventName, ev.eventType),
           description: ev.description ?? undefined,
           order: order++,
           screenIndex,
           behavioralEventId: ev.id,
+          triggerEvent: ev.eventName,
         });
       }
     }
   }
 
-  // Phase 2: Flow-wide behavioral events (tooltip, popup, etc. with screenIndex -1)
-  // These don't belong to a specific screen — append after all screen steps
   for (const ev of input.behavioralEvents) {
     if (!addedBehavioralIds.has(ev.id)) {
       addedBehavioralIds.add(ev.id);
       steps.push({
         kind: "ACTION",
-        name: ev.eventName,
+        name: humanizeName(ev.eventName, ev.eventType),
         description: ev.description ?? undefined,
         order: order++,
         behavioralEventId: ev.id,
+        triggerEvent: ev.eventName,
       });
     }
   }
 
-  // Phase 3: Application events as SYSTEM_TRIGGER steps
   for (const ev of input.applicationEvents) {
     steps.push({
       kind: "SYSTEM_TRIGGER",
-      name: ev.eventName,
+      name: humanizeName(ev.eventName, ev.eventType),
       description: ev.description ?? undefined,
       order: order++,
       applicationEventId: ev.id,
+      triggerEvent: ev.eventName,
     });
   }
 

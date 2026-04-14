@@ -5,6 +5,7 @@ import {
   deleteCommunication,
 } from "@/lib/services/communication";
 import { getDomainById } from "@/lib/services/domain";
+import { logAudit } from "@/lib/services/audit";
 
 export async function GET(
   _request: NextRequest,
@@ -51,10 +52,23 @@ export async function PATCH(
       name: body.name,
       description: body.description,
       templateId: body.templateId,
+      channel: body.channel,
+      communicationType: body.communicationType,
+      category: body.category,
+      preferenceGroup: body.preferenceGroup,
+      preferenceCategories: body.preferenceCategories,
       tags: body.tags,
       owner: body.owner,
       status: body.status,
       contentOutline: body.contentOutline,
+    });
+
+    await logAudit({
+      domainId: id,
+      entityType: "COMMUNICATION",
+      entityId: commId,
+      action: "UPDATE",
+      changes: body as Record<string, unknown>,
     });
 
     return NextResponse.json({ communication });
@@ -79,6 +93,12 @@ export async function DELETE(
     }
 
     await deleteCommunication(commId, id);
+    await logAudit({
+      domainId: id,
+      entityType: "COMMUNICATION",
+      entityId: commId,
+      action: "DELETE",
+    });
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error(err);

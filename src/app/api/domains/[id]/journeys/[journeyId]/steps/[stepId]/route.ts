@@ -5,6 +5,7 @@ import {
   updateJourneyStep,
   deleteJourneyStep,
 } from "@/lib/services/journey-step";
+import { logAudit } from "@/lib/services/audit";
 
 export async function PATCH(
   request: NextRequest,
@@ -32,6 +33,17 @@ export async function PATCH(
       applicationEventId: body.applicationEventId,
       communicationPointName: body.communicationPointName,
       triggerEvent: body.triggerEvent,
+      conditionConfig: body.conditionConfig,
+      waitDuration: body.waitDuration,
+      splitVariants: body.splitVariants,
+    });
+
+    await logAudit({
+      domainId: id,
+      entityType: "STEP",
+      entityId: stepId,
+      action: "UPDATE",
+      changes: body,
     });
 
     const journey = await getJourneyById(journeyId, id);
@@ -59,6 +71,12 @@ export async function DELETE(
     }
 
     await deleteJourneyStep(stepId, id);
+    await logAudit({
+      domainId: id,
+      entityType: "STEP",
+      entityId: stepId,
+      action: "DELETE",
+    });
     const journey = await getJourneyById(journeyId, id);
     return NextResponse.json({ journey });
   } catch (err) {

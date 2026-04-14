@@ -38,3 +38,7 @@ tsconfig.tsbuildinfo
 
 # Cursor
 .cursor/
+
+# Build artifacts
+next
+pm-internal-tool@0.1.0

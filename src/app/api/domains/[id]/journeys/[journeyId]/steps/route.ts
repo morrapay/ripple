@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDomainById } from "@/lib/services/domain";
 import { getJourneyById } from "@/lib/services/journey";
 import { createJourneyStep } from "@/lib/services/journey-step";
+import { logAudit } from "@/lib/services/audit";
 
 export async function POST(
   request: NextRequest,
@@ -22,6 +23,7 @@ export async function POST(
     }
 
     const body = await request.json();
+    const beforeStepIds = new Set(journey.steps.map((s) => s.id));
     await createJourneyStep(id, {
       name: body.name ?? "New step",
       description: body.description,
@@ -33,9 +35,19 @@ export async function POST(
       applicationEventId: body.applicationEventId,
       communicationPointName: body.communicationPointName,
       triggerEvent: body.triggerEvent,
+      insertAfterOrder: body.insertAfterOrder,
     });
 
     const updated = await getJourneyById(journeyId, id);
+    const newStep = updated?.steps.find((s) => !beforeStepIds.has(s.id));
+    if (newStep) {
+      await logAudit({
+        domainId: id,
+        entityType: "STEP",
+        entityId: newStep.id,
+        action: "CREATE",
+      });
+    }
     return NextResponse.json({ journey: updated }, { status: 201 });
   } catch (err) {
     console.error(err);

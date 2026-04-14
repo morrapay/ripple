@@ -14,8 +14,12 @@ export interface DomainProgress {
   applicationEventsApproved: number;
   journeyStepsCount: number;
   communicationPointsCount: number;
+  communicationsTotal: number;
+  communicationsDraft: number;
   communicationsReadyForBraze: number;
+  commStepsWithoutComms: number;
   canProceedToMapping: boolean;
+  hasEvents: boolean;
 }
 
 export async function getDomainProgress(domainId: string): Promise<DomainProgress> {
@@ -26,7 +30,7 @@ export async function getDomainProgress(domainId: string): Promise<DomainProgres
     applicationEvents,
     journeySteps,
     communicationPoints,
-    communications,
+    allCommunications,
   ] = await Promise.all([
     prisma.domain.findUnique({ where: { id: domainId } }),
     prisma.flow.findMany({ where: { domainId } }),
@@ -34,9 +38,7 @@ export async function getDomainProgress(domainId: string): Promise<DomainProgres
     prisma.applicationEvent.findMany({ where: { domainId } }),
     prisma.journeyStep.findMany({ where: { domainId } }),
     prisma.communicationPoint.findMany({ where: { domainId } }),
-    prisma.communication.findMany({
-      where: { domainId, status: "READY_FOR_BRAZE" },
-    }),
+    prisma.communication.findMany({ where: { domainId } }),
   ]);
 
   const happyFlows = flows.filter((f: { flowType: string }) => f.flowType === "HAPPY_FLOW").length;
@@ -61,6 +63,14 @@ export async function getDomainProgress(domainId: string): Promise<DomainProgres
   const canProceedToMapping =
     (hasRequiredFlows && hasRequiredEvents) || eventsManuallyConfirmed;
 
+  const commSteps = journeySteps.filter((s: { kind: string }) => s.kind === "COMMUNICATION");
+  const commStepIds = new Set(commSteps.map((s: { id: string }) => s.id));
+  const cpStepIds = new Set(communicationPoints.map((cp: { journeyStepId: string | null }) => cp.journeyStepId).filter(Boolean));
+  const commStepsWithoutComms = [...commStepIds].filter((id) => !cpStepIds.has(id)).length;
+
+  const communicationsDraft = allCommunications.filter((c: { status: string }) => c.status === "DRAFT").length;
+  const communicationsReady = allCommunications.filter((c: { status: string }) => c.status === "READY_FOR_BRAZE").length;
+
   return {
     figmaFlowsTotal: flows.length,
     figmaFlowsHappy: happyFlows,
@@ -75,7 +85,11 @@ export async function getDomainProgress(domainId: string): Promise<DomainProgres
     applicationEventsApproved: applicationByStatus.APPROVED,
     journeyStepsCount: journeySteps.length,
     communicationPointsCount: communicationPoints.length,
-    communicationsReadyForBraze: communications.length,
+    communicationsTotal: allCommunications.length,
+    communicationsDraft,
+    communicationsReadyForBraze: communicationsReady,
+    commStepsWithoutComms,
     canProceedToMapping,
+    hasEvents: behavioralEvents.length > 0 || applicationEvents.length > 0,
   };
 }

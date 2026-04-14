@@ -50,6 +50,51 @@ enum CommunicationStatus {
   READY_FOR_BRAZE
 }
 
+enum ContentApprovalStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+}
+
+enum TicketType {
+  LEGAL_SIGNOFF
+  LOCALIZATION
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+}
+
+enum AuditAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+enum AuditEntityType {
+  JOURNEY
+  STEP
+  COMMUNICATION
+  BEHAVIORAL_EVENT
+  APPLICATION_EVENT
+  COMMUNICATION_POINT
+  PREFERENCE_CATEGORY
+}
+
+enum DependencyType {
+  MUST_PRECEDE
+  MUTUALLY_EXCLUSIVE
+  TRIGGERS
+}
+
+enum CommunicationType {
+  PROMOTIONAL
+  TRANSACTIONAL
+  OPERATIONAL
+}
+
 enum BrazeAvailability {
   AVAILABLE
   NOT_AVAILABLE
@@ -94,12 +139,144 @@ model SupportedService {
   domains   Domain[]
 }
 
+// ─── Auth & Roles ────────────────────────────────────
+enum UserRole {
+  ADMIN
+  MANAGER
+  PRODUCT_MANAGER
+  ANALYST
+  CONTENT_WRITER
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum NotificationType {
+  APPROVAL_REQUEST
+  APPROVAL_GRANTED
+  APPROVAL_REJECTED
+  SYSTEM
+  INFO
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          UserRole  @default(PRODUCT_MANAGER)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  notifications Notification[]
+  requestedApprovals ApprovalRequest[] @relation("ApprovalRequester")
+  reviewedApprovals  ApprovalRequest[] @relation("ApprovalReviewer")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String?
+  link      String?
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+}
+
+model ApprovalRequest {
+  id          String         @id @default(cuid())
+  domainId    String
+  domain      Domain         @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  requesterId String
+  requester   User           @relation("ApprovalRequester", fields: [requesterId], references: [id])
+  reviewerId  String?
+  reviewer    User?          @relation("ApprovalReviewer", fields: [reviewerId], references: [id])
+  type        String         @default("EVENT_APPROVAL")
+  status      ApprovalStatus @default(PENDING)
+  note        String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+// ─── Learning System (EventToJourneyMapper) ─────────
+model LearnedRule {
+  id              String   @id @default(cuid())
+  domainId        String
+  pattern         String
+  appliesTo       String
+  type            String
+  confidence      String   @default("LOW")
+  sourceType      String   @default("USER_CORRECTION")
+  correctionCount Int      @default(1)
+  active          Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model DriftSignal {
+  id          String   @id @default(cuid())
+  domainId    String
+  pattern     String
+  description String
+  occurrences Int      @default(1)
+  resolved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ─── Domain ──────────────────────────────────────────
 model Domain {
   id                      String   @id @default(cuid())
   name                    String
   description             String?
   tags                    String[] @default([])
   eventsManuallyConfirmed Boolean  @default(false)
+  generationContext       Json?
   selectedServiceId       String?
   selectedService         SupportedService? @relation(fields: [selectedServiceId], references: [id], onDelete: SetNull)
   createdAt               DateTime @default(now())
@@ -113,6 +290,12 @@ model Domain {
   communicationPoints   CommunicationPoint[]
   communications        Communication[]
   archiveSnapshots      ArchiveSnapshot[]
+  approvalRequests      ApprovalRequest[]
+  auditLogs             AuditLog[]
+  comments              Comment[]
+  tickets               Ticket[]
+  preferenceCategories  PreferenceCategory[]
+  communicationDependencies CommunicationDependency[]
 }
 
 model Flow {
@@ -178,37 +361,51 @@ model JourneyStepApplicationEvent {
 }
 
 model Journey {
-  id          String   @id @default(cuid())
-  domainId    String
-  domain      Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
-  name        String
-  description String?
-  coverImage  String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  domainId      String
+  domain        Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  name          String
+  description   String?
+  audience      String?
+  objective     String?
+  coverImage    String?
+  status        String   @default("Draft")
+  platform      String   @default("Web")
+  tags          String[] @default([])
+  entryCriteria Json?
+  exitCriteria  Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   steps JourneyStep[]
+  edges JourneyEdge[]
 }
 
 model JourneyStep {
-  id          String   @id @default(cuid())
-  domainId    String
-  domain      Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
-  journeyId   String?
-  journey     Journey? @relation(fields: [journeyId], references: [id], onDelete: Cascade)
-  flowIndex   Int      @default(0)
-  order       Int
-  name        String
-  description String?
-  posX        Float    @default(0)
-  posY        Float    @default(0)
-  imageUrl    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(cuid())
+  domainId        String
+  domain          Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  journeyId       String?
+  journey         Journey? @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  flowIndex       Int      @default(0)
+  order           Int
+  name            String
+  description     String?
+  kind            String   @default("STATE")
+  posX            Float    @default(0)
+  posY            Float    @default(0)
+  imageUrl        String?
+  conditionConfig Json?
+  waitDuration    String?
+  splitVariants   Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   behavioralEvents    JourneyStepBehavioralEvent[]
   applicationEvents   JourneyStepApplicationEvent[]
   communicationPoints CommunicationPoint[]
+  outgoingEdges       JourneyEdge[] @relation("EdgeSource")
+  incomingEdges       JourneyEdge[] @relation("EdgeTarget")
 }
 
 model CommunicationPoint {
@@ -227,22 +424,34 @@ model CommunicationPoint {
 }
 
 model Communication {
-  id                    String              @id @default(cuid())
-  domainId              String
-  domain                Domain              @relation(fields: [domainId], references: [id], onDelete: Cascade)
-  communicationPointId  String?             @unique
-  communicationPoint    CommunicationPoint? @relation(fields: [communicationPointId], references: [id], onDelete: SetNull)
-  templateId            String?
-  template              CommunicationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  name                  String              @default("Untitled")
-  contentOutline        Json?
-  description           String?
-  tags                  String[]            @default([])
-  approvalCategory      String?
-  owner                 String?
-  status                CommunicationStatus @default(DRAFT)
-  createdAt             DateTime            @default(now())
-  updatedAt             DateTime            @updatedAt
+  id                      String                @id @default(cuid())
+  domainId                String
+  domain                  Domain                @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  communicationPointId    String?               @unique
+  communicationPoint      CommunicationPoint?   @relation(fields: [communicationPointId], references: [id], onDelete: SetNull)
+  templateId              String?
+  template                CommunicationTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  name                    String                @default("Untitled")
+  channel                 String?
+  communicationType       CommunicationType?
+  category                String?
+  preferenceGroup         String?
+  preferenceCategories    String[]              @default([])
+  contentOutline          Json?
+  description             String?
+  tags                    String[]              @default([])
+  approvalCategory        String?
+  owner                   String?
+  status                  CommunicationStatus   @default(DRAFT)
+  contentApprovalStatus   ContentApprovalStatus?
+  contentApprovedBy       String?
+  contentApprovedAt       DateTime?
+  createdAt               DateTime              @default(now())
+  updatedAt               DateTime              @updatedAt
+
+  tickets                 Ticket[]
+  dependenciesFrom        CommunicationDependency[] @relation("DepFrom")
+  dependenciesTo          CommunicationDependency[] @relation("DepTo")
 }
 
 model BehavioralTaxonomyType {
@@ -275,4 +484,103 @@ model ArchiveSnapshot {
   author    String?
   snapshot  Json
   createdAt DateTime @default(now())
+}
+
+// ─── Journey Edges (explicit branching) ─────────────
+model JourneyEdge {
+  id           String      @id @default(cuid())
+  journeyId    String
+  journey      Journey     @relation(fields: [journeyId], references: [id], onDelete: Cascade)
+  sourceStepId String
+  sourceStep   JourneyStep @relation("EdgeSource", fields: [sourceStepId], references: [id], onDelete: Cascade)
+  targetStepId String
+  targetStep   JourneyStep @relation("EdgeTarget", fields: [targetStepId], references: [id], onDelete: Cascade)
+  label        String?
+  condition    Json?
+  sortOrder    Int         @default(0)
+  createdAt    DateTime    @default(now())
+}
+
+// ─── Audit Trail ─────────────────────────────────────
+model AuditLog {
+  id         String          @id @default(cuid())
+  domainId   String
+  domain     Domain          @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  entityType AuditEntityType
+  entityId   String
+  action     AuditAction
+  userId     String?
+  userName   String?
+  changes    Json?
+  createdAt  DateTime        @default(now())
+
+  @@index([entityType, entityId])
+  @@index([domainId, createdAt])
+}
+
+// ─── Comments & Annotations ──────────────────────────
+model Comment {
+  id         String    @id @default(cuid())
+  domainId   String
+  domain     Domain    @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  entityType String
+  entityId   String
+  userId     String?
+  userName   String?
+  text       String
+  parentId   String?
+  parent     Comment?  @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+  replies    Comment[] @relation("CommentThread")
+  resolved   Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([entityType, entityId])
+}
+
+// ─── Tickets (Jira integration) ──────────────────────
+model Ticket {
+  id              String       @id @default(cuid())
+  domainId        String
+  domain          Domain       @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  communicationId String
+  communication   Communication @relation(fields: [communicationId], references: [id], onDelete: Cascade)
+  type            TicketType
+  status          TicketStatus @default(OPEN)
+  jiraKey         String?
+  jiraUrl         String?
+  assignee        String?
+  summary         String?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+// ─── Communication Dependencies ──────────────────────
+model CommunicationDependency {
+  id                  String         @id @default(cuid())
+  domainId            String
+  domain              Domain         @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  fromCommunicationId String
+  fromCommunication   Communication  @relation("DepFrom", fields: [fromCommunicationId], references: [id], onDelete: Cascade)
+  toCommunicationId   String
+  toCommunication     Communication  @relation("DepTo", fields: [toCommunicationId], references: [id], onDelete: Cascade)
+  type                DependencyType
+  createdAt           DateTime       @default(now())
+
+  @@unique([fromCommunicationId, toCommunicationId])
+}
+
+// ─── Preference Center ───────────────────────────────
+model PreferenceCategory {
+  id           String   @id @default(cuid())
+  domainId     String
+  domain       Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  canOptOut    Boolean  @default(true)
+  mandatory    Boolean  @default(false)
+  displayOrder Int      @default(0)
+  icon         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 }

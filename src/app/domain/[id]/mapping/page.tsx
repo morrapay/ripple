@@ -3,6 +3,7 @@ import { getDomainById } from "@/lib/services/domain";
 import { getDomainProgress } from "@/lib/services/progress";
 import { ProgressStepper } from "@/components/progress-stepper";
 import { JourneyDashboard } from "@/components/journey/journey-dashboard";
+import { JourneyExample } from "@/components/journey-example";
 
 export default async function MappingPage({
   params,
@@ -48,6 +49,10 @@ export default async function MappingPage({
           <span className="w-3 h-3 rounded-sm bg-zinc-500/50" />
           State
         </span>
+      </div>
+
+      <div className="mb-6">
+        <JourneyExample />
       </div>
 
       <JourneyDashboard domainId={id} />

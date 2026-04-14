@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { CommentsPanel } from "../comments-panel";
 
 type StepKind = "ACTION" | "SYSTEM_TRIGGER" | "COMMUNICATION" | "STATE";
 
@@ -9,6 +10,8 @@ interface JourneySummary {
   id: string;
   name: string;
   description: string | null;
+  audience: string | null;
+  objective: string | null;
   createdAt: string;
   updatedAt: string;
   steps: {
@@ -65,6 +68,10 @@ export function JourneyDashboard({ domainId }: JourneyDashboardProps) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasEvents, setHasEvents] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newName, setNewName] = useState("New Journey");
+  const [newAudience, setNewAudience] = useState("");
+  const [newObjective, setNewObjective] = useState("");
 
   useEffect(() => {
     fetchData();
@@ -122,10 +129,18 @@ export function JourneyDashboard({ domainId }: JourneyDashboardProps) {
       const res = await fetch(`/api/domains/${domainId}/journeys`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "New Journey" }),
+        body: JSON.stringify({
+          name: newName.trim() || "New Journey",
+          audience: newAudience.trim() || undefined,
+          objective: newObjective.trim() || undefined,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to create");
+      setShowCreateModal(false);
+      setNewName("New Journey");
+      setNewAudience("");
+      setNewObjective("");
       router.push(`/domain/${domainId}/mapping/${data.journey.id}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to create");
@@ -199,14 +214,79 @@ export function JourneyDashboard({ domainId }: JourneyDashboardProps) {
           </button>
           <button
             type="button"
-            onClick={handleCreateBlank}
+            onClick={() => setShowCreateModal(true)}
             disabled={creating}
             className="px-4 py-2 rounded-lg border border-[var(--card-border)] bg-[var(--card)] text-zinc-300 text-sm hover:bg-zinc-800 transition-all"
           >
-            + Blank Journey
+            + New Journey
           </button>
         </div>
       </div>
+
+      {showCreateModal && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center" onClick={() => setShowCreateModal(false)}>
+          <div className="absolute inset-0 bg-black/60" />
+          <div
+            className="relative bg-[var(--card)] border border-[var(--card-border)] rounded-xl shadow-2xl w-full max-w-md mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800">
+              <h3 className="text-sm font-medium text-zinc-200">Create New Journey</h3>
+              <button onClick={() => setShowCreateModal(false)} className="p-1 rounded hover:bg-zinc-800 text-zinc-500">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6L6 18M6 6l12 12" /></svg>
+              </button>
+            </div>
+            <div className="px-5 py-4 space-y-4">
+              <label className="block">
+                <span className="text-xs font-medium text-zinc-400">Journey Name</span>
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 rounded-md border border-zinc-700 bg-zinc-900 text-sm text-zinc-200 focus:border-[var(--accent)] focus:outline-none"
+                  placeholder="e.g. Onboarding Flow"
+                  autoFocus
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-zinc-400">Audience</span>
+                <input
+                  type="text"
+                  value={newAudience}
+                  onChange={(e) => setNewAudience(e.target.value)}
+                  className="mt-1 w-full px-3 py-2 rounded-md border border-zinc-700 bg-zinc-900 text-sm text-zinc-200 focus:border-[var(--accent)] focus:outline-none"
+                  placeholder="e.g. New users who haven't completed KYC"
+                />
+              </label>
+              <label className="block">
+                <span className="text-xs font-medium text-zinc-400">Objective</span>
+                <textarea
+                  value={newObjective}
+                  onChange={(e) => setNewObjective(e.target.value)}
+                  rows={2}
+                  className="mt-1 w-full px-3 py-2 rounded-md border border-zinc-700 bg-zinc-900 text-sm text-zinc-200 focus:border-[var(--accent)] focus:outline-none resize-none"
+                  placeholder="e.g. Guide users through identity verification to increase completion rate"
+                />
+              </label>
+            </div>
+            <div className="px-5 py-4 border-t border-zinc-800 flex gap-2 justify-end">
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="px-3 py-2 rounded-md text-xs text-zinc-400 hover:bg-zinc-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateBlank}
+                disabled={creating}
+                className="px-4 py-2 rounded-md bg-[var(--accent)] text-white text-xs font-medium hover:bg-[var(--accent-muted)] disabled:opacity-50 transition-colors"
+              >
+                {creating ? "Creating..." : "Create Journey"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {journeys.length === 0 ? (
         <EmptyState hasEvents={hasEvents} onGenerate={handleGenerate} />
@@ -237,6 +317,7 @@ function JourneyCard({
 }) {
   const router = useRouter();
   const counts = getStepKindCounts(journey);
+  const [showComments, setShowComments] = useState(false);
 
   return (
     <div
@@ -278,6 +359,23 @@ function JourneyCard({
         </button>
       </div>
 
+      {(journey.audience || journey.objective) && (
+        <div className="space-y-1 mb-3">
+          {journey.audience && (
+            <p className="text-[11px] text-zinc-500 flex items-start gap-1.5">
+              <span className="text-zinc-600 shrink-0 font-medium">Audience:</span>
+              <span className="line-clamp-1">{journey.audience}</span>
+            </p>
+          )}
+          {journey.objective && (
+            <p className="text-[11px] text-zinc-500 flex items-start gap-1.5">
+              <span className="text-zinc-600 shrink-0 font-medium">Objective:</span>
+              <span className="line-clamp-1">{journey.objective}</span>
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="flex items-center gap-4 text-xs text-zinc-500 mb-4">
         <span>{journey.steps.length} steps</span>
         <span>{timeAgo(journey.updatedAt)}</span>
@@ -296,6 +394,28 @@ function JourneyCard({
           <span className="text-xs text-zinc-600 italic">Empty journey</span>
         )}
       </div>
+
+      <div className="flex items-center gap-2 mt-3">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowComments(!showComments);
+          }}
+          className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+          </svg>
+          {showComments ? "Hide" : "Comments"}
+        </button>
+      </div>
+
+      {showComments && (
+        <div className="mt-3 border-t border-zinc-800 pt-3" onClick={(e) => e.stopPropagation()}>
+          <CommentsPanel domainId={domainId} entityType="JOURNEY" entityId={journey.id} />
+        </div>
+      )}
 
       <div className="absolute bottom-0 left-0 right-0 h-1 rounded-b-xl overflow-hidden flex">
         {KIND_DOTS.map(({ kind, color }) => {

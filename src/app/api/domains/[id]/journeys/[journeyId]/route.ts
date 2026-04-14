@@ -47,7 +47,11 @@ export async function PATCH(
     const journey = await updateJourney(journeyId, id, {
       name: body.name,
       description: body.description,
+      audience: body.audience,
+      objective: body.objective,
       coverImage: body.coverImage,
+      entryCriteria: body.entryCriteria,
+      exitCriteria: body.exitCriteria,
     });
     if (!journey) {
       return NextResponse.json(

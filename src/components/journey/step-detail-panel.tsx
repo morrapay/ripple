@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import type { StepKind } from "./journey-node";
+import { AuditHistory } from "../audit-history";
+import { CommentsPanel } from "../comments-panel";
 
 interface BehavioralEvent {
   id: string;
@@ -29,6 +31,9 @@ export interface SelectedStepData {
   description: string | null;
   kind: StepKind;
   imageUrl: string | null;
+  waitDuration: string | null;
+  splitVariants: { name: string; percentage: number }[] | null;
+  conditionConfig: Record<string, unknown> | null;
   behavioralEvents: { behavioralEvent: BehavioralEvent }[];
   applicationEvents: { applicationEvent: ApplicationEvent }[];
   communicationPoints: CommunicationPoint[];
@@ -36,6 +41,7 @@ export interface SelectedStepData {
 
 interface StepDetailPanelProps {
   step: SelectedStepData;
+  domainId: string;
   allBehavioralEvents: BehavioralEvent[];
   allApplicationEvents: ApplicationEvent[];
   onSave: (payload: Record<string, unknown>) => Promise<void>;
@@ -49,10 +55,16 @@ const KIND_OPTIONS: { value: StepKind; label: string; color: string }[] = [
   { value: "SYSTEM_TRIGGER", label: "System Trigger", color: "text-blue-400" },
   { value: "COMMUNICATION", label: "Communication", color: "text-violet-400" },
   { value: "STATE", label: "State", color: "text-zinc-400" },
+  { value: "DECISION", label: "Decision", color: "text-emerald-400" },
+  { value: "WAIT_DELAY", label: "Wait / Delay", color: "text-orange-400" },
+  { value: "AB_SPLIT", label: "A/B Split", color: "text-teal-400" },
 ];
+
+const WAIT_UNITS = ["minutes", "hours", "days"] as const;
 
 export function StepDetailPanel({
   step,
+  domainId,
   allBehavioralEvents,
   allApplicationEvents,
   onSave,
@@ -76,6 +88,19 @@ export function StepDetailPanel({
   const [triggerEvent, setTriggerEvent] = useState(
     step.communicationPoints[0]?.triggerEvent ?? ""
   );
+  const [waitDuration, setWaitDuration] = useState(step.waitDuration ?? "");
+  const [splitVariants, setSplitVariants] = useState<{ name: string; percentage: number }[]>(
+    step.splitVariants ?? [{ name: "A", percentage: 50 }, { name: "B", percentage: 50 }]
+  );
+  const [conditionAttr, setConditionAttr] = useState(
+    (step.conditionConfig as Record<string, string> | null)?.attribute ?? ""
+  );
+  const [conditionOp, setConditionOp] = useState(
+    (step.conditionConfig as Record<string, string> | null)?.operator ?? "equals"
+  );
+  const [conditionVal, setConditionVal] = useState(
+    (step.conditionConfig as Record<string, string> | null)?.value ?? ""
+  );
   const [uploading, setUploading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -94,6 +119,12 @@ export function StepDetailPanel({
     );
     setCommName(step.communicationPoints[0]?.name ?? "");
     setTriggerEvent(step.communicationPoints[0]?.triggerEvent ?? "");
+    setWaitDuration(step.waitDuration ?? "");
+    setSplitVariants(step.splitVariants ?? [{ name: "A", percentage: 50 }, { name: "B", percentage: 50 }]);
+    const cc = step.conditionConfig as Record<string, string> | null;
+    setConditionAttr(cc?.attribute ?? "");
+    setConditionOp(cc?.operator ?? "equals");
+    setConditionVal(cc?.value ?? "");
   }, [step.id]);
 
   async function handleSave() {
@@ -108,8 +139,17 @@ export function StepDetailPanel({
         applicationEventId: kind === "SYSTEM_TRIGGER" ? (applicationEventId || null) : null,
       };
       if (kind === "COMMUNICATION") {
-        payload.communicationPointName = commName.trim();
+        payload.communicationPointName = commName.trim() || name.trim() || "Communication";
         payload.triggerEvent = triggerEvent.trim() || undefined;
+      }
+      if (kind === "DECISION") {
+        payload.conditionConfig = { attribute: conditionAttr, operator: conditionOp, value: conditionVal };
+      }
+      if (kind === "WAIT_DELAY") {
+        payload.waitDuration = waitDuration.trim() || undefined;
+      }
+      if (kind === "AB_SPLIT") {
+        payload.splitVariants = splitVariants;
       }
       await onSave(payload);
     } finally {
@@ -266,37 +306,63 @@ export function StepDetailPanel({
         </Field>
 
         {kind === "ACTION" && (
-          <Field label="Linked Behavioral Event">
-            <select
-              value={behavioralEventId}
-              onChange={(e) => setBehavioralEventId(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-zinc-700 bg-zinc-900 text-sm text-zinc-200 focus:border-[var(--accent)] focus:outline-none transition-colors"
-            >
-              <option value="">-- None --</option>
-              {allBehavioralEvents.map((ev) => (
-                <option key={ev.id} value={ev.id}>
-                  {ev.eventName}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <>
+            <Field label="Trigger Event">
+              <select
+                value={behavioralEventId}
+                onChange={(e) => setBehavioralEventId(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-zinc-700 bg-zinc-900 text-sm text-zinc-200 focus:border-[var(--accent)] focus:outline-none transition-colors"
+              >
+                <option value="">-- None --</option>
+                {allBehavioralEvents.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.eventName}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {behavioralEventId && (() => {
+              const ev = allBehavioralEvents.find((e) => e.id === behavioralEventId);
+              return ev ? (
+                <div className="rounded-md border border-zinc-700/50 bg-zinc-900/40 px-3 py-2">
+                  <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider mb-1">Event Details</p>
+                  <p className="text-xs text-zinc-300 font-mono">{ev.eventName}</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">{ev.eventType}</p>
+                  {ev.description && <p className="text-[10px] text-zinc-500 mt-0.5">{ev.description}</p>}
+                </div>
+              ) : null;
+            })()}
+          </>
         )}
 
         {kind === "SYSTEM_TRIGGER" && (
-          <Field label="Linked Application Event">
-            <select
-              value={applicationEventId}
-              onChange={(e) => setApplicationEventId(e.target.value)}
-              className="w-full px-3 py-2 rounded-md border border-zinc-700 bg-zinc-900 text-sm text-zinc-200 focus:border-[var(--accent)] focus:outline-none transition-colors"
-            >
-              <option value="">-- None --</option>
-              {allApplicationEvents.map((ev) => (
-                <option key={ev.id} value={ev.id}>
-                  {ev.eventName}
-                </option>
-              ))}
-            </select>
-          </Field>
+          <>
+            <Field label="Trigger Event">
+              <select
+                value={applicationEventId}
+                onChange={(e) => setApplicationEventId(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-zinc-700 bg-zinc-900 text-sm text-zinc-200 focus:border-[var(--accent)] focus:outline-none transition-colors"
+              >
+                <option value="">-- None --</option>
+                {allApplicationEvents.map((ev) => (
+                  <option key={ev.id} value={ev.id}>
+                    {ev.eventName}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            {applicationEventId && (() => {
+              const ev = allApplicationEvents.find((e) => e.id === applicationEventId);
+              return ev ? (
+                <div className="rounded-md border border-zinc-700/50 bg-zinc-900/40 px-3 py-2">
+                  <p className="text-[10px] text-zinc-500 font-medium uppercase tracking-wider mb-1">Event Details</p>
+                  <p className="text-xs text-zinc-300 font-mono">{ev.eventName}</p>
+                  <p className="text-[10px] text-zinc-500 mt-0.5">{ev.eventType}</p>
+                  {ev.description && <p className="text-[10px] text-zinc-500 mt-0.5">{ev.description}</p>}
+                </div>
+              ) : null;
+            })()}
+          </>
         )}
 
         {kind === "COMMUNICATION" && (
@@ -320,6 +386,118 @@ export function StepDetailPanel({
               />
             </Field>
           </>
+        )}
+
+        {kind === "DECISION" && (
+          <>
+            <div className="rounded-lg border border-emerald-500/20 bg-emerald-950/20 px-3 py-2.5">
+              <p className="text-[11px] text-emerald-300/80 leading-relaxed">
+                <strong>How branching works:</strong> Define the condition below. On the canvas, drag from the <span className="text-emerald-400 font-bold">YES</span> handle (right) to the next step when the condition is true, and from the <span className="text-red-400 font-bold">NO</span> handle (bottom) for the false path.
+              </p>
+            </div>
+            <Field label="Condition Attribute">
+              <input
+                type="text"
+                value={conditionAttr}
+                onChange={(e) => setConditionAttr(e.target.value)}
+                placeholder="e.g. user.kyc_status"
+                className="w-full px-3 py-2 rounded-md border border-zinc-700 bg-zinc-900 text-sm text-zinc-200 focus:border-[var(--accent)] focus:outline-none transition-colors"
+              />
+            </Field>
+            <Field label="Operator">
+              <select
+                value={conditionOp}
+                onChange={(e) => setConditionOp(e.target.value)}
+                className="w-full px-3 py-2 rounded-md border border-zinc-700 bg-zinc-900 text-sm text-zinc-200 focus:border-[var(--accent)] focus:outline-none transition-colors"
+              >
+                <option value="equals">Equals</option>
+                <option value="not_equals">Not Equals</option>
+                <option value="contains">Contains</option>
+                <option value="greater_than">Greater Than</option>
+                <option value="less_than">Less Than</option>
+                <option value="is_set">Is Set</option>
+                <option value="is_not_set">Is Not Set</option>
+              </select>
+            </Field>
+            <Field label="Value">
+              <input
+                type="text"
+                value={conditionVal}
+                onChange={(e) => setConditionVal(e.target.value)}
+                placeholder="e.g. approved"
+                className="w-full px-3 py-2 rounded-md border border-zinc-700 bg-zinc-900 text-sm text-zinc-200 focus:border-[var(--accent)] focus:outline-none transition-colors"
+              />
+            </Field>
+          </>
+        )}
+
+        {kind === "WAIT_DELAY" && (
+          <Field label="Wait Duration">
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={waitDuration}
+                onChange={(e) => setWaitDuration(e.target.value)}
+                placeholder="e.g. 24 hours, 3 days"
+                className="flex-1 px-3 py-2 rounded-md border border-zinc-700 bg-zinc-900 text-sm text-zinc-200 focus:border-[var(--accent)] focus:outline-none transition-colors"
+              />
+            </div>
+            <p className="text-[11px] text-zinc-500 mt-1">Examples: &quot;30 minutes&quot;, &quot;24 hours&quot;, &quot;7 days&quot;</p>
+          </Field>
+        )}
+
+        {kind === "AB_SPLIT" && (
+          <Field label="Variants">
+            <div className="space-y-2">
+              {splitVariants.map((v, i) => (
+                <div key={i} className="flex gap-2 items-center">
+                  <input
+                    type="text"
+                    value={v.name}
+                    onChange={(e) => {
+                      const next = [...splitVariants];
+                      next[i] = { ...next[i], name: e.target.value };
+                      setSplitVariants(next);
+                    }}
+                    className="w-16 px-2 py-1.5 rounded-md border border-zinc-700 bg-zinc-900 text-sm text-zinc-200 focus:border-[var(--accent)] focus:outline-none"
+                    placeholder="Name"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={v.percentage}
+                    onChange={(e) => {
+                      const next = [...splitVariants];
+                      next[i] = { ...next[i], percentage: Number(e.target.value) };
+                      setSplitVariants(next);
+                    }}
+                    className="w-20 px-2 py-1.5 rounded-md border border-zinc-700 bg-zinc-900 text-sm text-zinc-200 focus:border-[var(--accent)] focus:outline-none"
+                  />
+                  <span className="text-xs text-zinc-500">%</span>
+                  {splitVariants.length > 2 && (
+                    <button
+                      type="button"
+                      onClick={() => setSplitVariants(splitVariants.filter((_, j) => j !== i))}
+                      className="text-xs text-red-400 hover:text-red-300"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={() => setSplitVariants([...splitVariants, { name: String.fromCharCode(65 + splitVariants.length), percentage: 0 }])}
+                className="text-xs text-[var(--accent)] hover:underline"
+              >
+                + Add variant
+              </button>
+              {splitVariants.reduce((s, v) => s + v.percentage, 0) !== 100 && (
+                <p className="text-[11px] text-amber-400">Percentages must sum to 100%</p>
+              )}
+            </div>
+          </Field>
         )}
       </div>
 
@@ -349,6 +527,12 @@ export function StepDetailPanel({
         >
           Split journey from here
         </button>
+      </div>
+
+      {/* Comments & Audit */}
+      <div className="border-t border-[var(--card-border)] px-4 py-3 space-y-3">
+        <AuditHistory domainId={domainId} entityType="STEP" entityId={step.id} />
+        <CommentsPanel domainId={domainId} entityType="STEP" entityId={step.id} />
       </div>
     </div>
   );

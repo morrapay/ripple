@@ -37,6 +37,9 @@ export async function updateDomain(id: string, input: UpdateDomainInput) {
       ...(input.selectedServiceId !== undefined && {
         selectedServiceId: input.selectedServiceId,
       }),
+      ...(input.generationContext !== undefined && {
+        generationContext: input.generationContext,
+      }),
     },
   });
 }

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getDomainById } from "@/lib/services/domain";
 import { PolicyReference } from "@/components/policy-reference";
+import { PolicyChatbot } from "@/components/policy-chatbot";
 
 export default async function ChannelsPage({
   params,
@@ -22,6 +23,7 @@ export default async function ChannelsPage({
       </p>
 
       <PolicyReference />
+      <PolicyChatbot />
     </div>
   );
 }

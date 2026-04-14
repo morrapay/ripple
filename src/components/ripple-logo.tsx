@@ -15,7 +15,7 @@ export function RippleLogo({
 }: RippleLogoProps) {
   return (
     <div
-      className={`flex items-center gap-2.5 ${className}`}
+      className={`group/ripple flex items-center gap-2.5 ${className}`}
       style={{ color: "var(--foreground)" }}
     >
       <svg
@@ -27,9 +27,7 @@ export function RippleLogo({
         aria-hidden
         className="shrink-0"
       >
-        {/* Center dot — solid accent */}
         <circle cx="16" cy="16" r="2.5" fill="var(--accent)" />
-        {/* Ripple rings — aligned with app accent & card-border palette */}
         <circle
           cx="16"
           cy="16"
@@ -37,6 +35,8 @@ export function RippleLogo({
           stroke="var(--accent)"
           strokeWidth="1.25"
           fill="none"
+          className="origin-center group-hover/ripple:animate-[ripple-wave_1.2s_ease-in-out_0s]"
+          style={{ "--ring-opacity": "0.85" } as React.CSSProperties}
           opacity="0.85"
         />
         <circle
@@ -46,6 +46,8 @@ export function RippleLogo({
           stroke="var(--accent)"
           strokeWidth="1"
           fill="none"
+          className="origin-center group-hover/ripple:animate-[ripple-wave_1.2s_ease-in-out_0.15s]"
+          style={{ "--ring-opacity": "0.55" } as React.CSSProperties}
           opacity="0.55"
         />
         <circle
@@ -55,6 +57,8 @@ export function RippleLogo({
           stroke="var(--accent)"
           strokeWidth="0.75"
           fill="none"
+          className="origin-center group-hover/ripple:animate-[ripple-wave_1.2s_ease-in-out_0.3s]"
+          style={{ "--ring-opacity": "0.3" } as React.CSSProperties}
           opacity="0.3"
         />
       </svg>

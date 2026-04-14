@@ -4,6 +4,7 @@ import {
   listJourneysByDomain,
   createJourney,
 } from "@/lib/services/journey";
+import { logAudit } from "@/lib/services/audit";
 
 export async function GET(
   _request: NextRequest,
@@ -40,6 +41,14 @@ export async function POST(
     const journey = await createJourney(id, {
       name: body.name ?? "Untitled Journey",
       description: body.description,
+      audience: body.audience,
+      objective: body.objective,
+    });
+    await logAudit({
+      domainId: id,
+      entityType: "JOURNEY",
+      entityId: journey.id,
+      action: "CREATE",
     });
     return NextResponse.json({ journey }, { status: 201 });
   } catch (err) {

@@ -6,6 +6,7 @@ import {
 } from "@/lib/services/application-event";
 import { createApplicationEventSchema } from "@/lib/validations/application-event";
 import { getDomainById } from "@/lib/services/domain";
+import { logAudit } from "@/lib/services/audit";
 
 export async function GET(
   _request: NextRequest,
@@ -51,11 +52,23 @@ export async function POST(
           );
         }
       }
+      const before = await listApplicationEventsByDomain(id);
+      const beforeIds = new Set(before.map((ev) => ev.id));
       await createApplicationEventsBulk(
         id,
         events.map((e: unknown) => createApplicationEventSchema.parse(e))
       );
       const all = await listApplicationEventsByDomain(id);
+      for (const ev of all) {
+        if (!beforeIds.has(ev.id)) {
+          await logAudit({
+            domainId: id,
+            entityType: "APPLICATION_EVENT",
+            entityId: ev.id,
+            action: "CREATE",
+          });
+        }
+      }
       return NextResponse.json({ events: all });
     }
 
@@ -67,6 +80,12 @@ export async function POST(
       );
     }
     const event = await createApplicationEvent(id, parsed.data);
+    await logAudit({
+      domainId: id,
+      entityType: "APPLICATION_EVENT",
+      entityId: event.id,
+      action: "CREATE",
+    });
     return NextResponse.json({ event });
   } catch (err) {
     console.error(err);

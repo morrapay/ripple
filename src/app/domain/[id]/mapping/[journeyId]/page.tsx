@@ -12,7 +12,7 @@ export default async function JourneyCanvasPage({
   if (!domain) notFound();
 
   return (
-    <div className="fixed inset-0 top-0 left-56 bg-[var(--background)] z-30 flex flex-col">
+    <div className="fixed inset-0 top-12 left-48 bg-[var(--background)] z-30 flex flex-col">
       <JourneyCanvas domainId={id} journeyId={journeyId} />
     </div>
   );

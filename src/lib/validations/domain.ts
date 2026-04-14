@@ -12,6 +12,7 @@ export const updateDomainSchema = z.object({
   tags: z.array(z.string().max(50)).optional(),
   eventsManuallyConfirmed: z.boolean().optional(),
   selectedServiceId: z.string().nullable().optional(),
+  generationContext: z.any().optional(),
 });
 
 export type CreateDomainInput = z.infer<typeof createDomainSchema>;
