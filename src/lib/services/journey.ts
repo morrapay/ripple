@@ -134,6 +134,18 @@ export async function splitJourney(
     });
   }
 
+  // Clean up edges: delete edges from old journey that reference moved steps
+  const movedStepIds = stepsToMove.map((s) => s.id);
+  await prisma.journeyEdge.deleteMany({
+    where: {
+      journeyId,
+      OR: [
+        { sourceStepId: { in: movedStepIds } },
+        { targetStepId: { in: movedStepIds } },
+      ],
+    },
+  });
+
   return {
     originalJourneyId: journeyId,
     newJourney: await getJourneyById(newJourney.id, domainId),

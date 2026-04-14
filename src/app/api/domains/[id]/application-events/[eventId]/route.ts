@@ -10,7 +10,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; eventId: string }> }
 ) {
   try {
-    const { eventId } = await params;
+    const { id, eventId } = await params;
     const body = await request.json();
     const parsed = updateApplicationEventSchema.safeParse(body);
     if (!parsed.success) {
@@ -19,7 +19,13 @@ export async function PATCH(
         { status: 400 }
       );
     }
-    const event = await updateApplicationEvent(eventId, parsed.data);
+    const event = await updateApplicationEvent(eventId, id, parsed.data);
+    if (!event) {
+      return NextResponse.json(
+        { error: "Application event not found" },
+        { status: 404 }
+      );
+    }
     return NextResponse.json({ event });
   } catch (err) {
     console.error(err);
@@ -35,13 +41,16 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; eventId: string }> }
 ) {
   try {
-    const { eventId } = await params;
-    await deleteApplicationEvent(eventId);
+    const { id, eventId } = await params;
+    const deleted = await deleteApplicationEvent(eventId, id);
+    if (!deleted) {
+      return NextResponse.json(
+        { error: "Application event not found" },
+        { status: 404 }
+      );
+    }
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
-    if (err && typeof err === "object" && "code" in err && err.code === "P2025") {
-      return NextResponse.json({ success: true });
-    }
     console.error(err);
     return NextResponse.json(
       { error: "Failed to delete application event" },

@@ -7,7 +7,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; eventId: string }> }
 ) {
   try {
-    const { eventId } = await params;
+    const { id, eventId } = await params;
     const body = await request.json();
     const parsed = updateBehavioralEventSchema.safeParse(body);
     if (!parsed.success) {
@@ -16,7 +16,13 @@ export async function PATCH(
         { status: 400 }
       );
     }
-    const event = await updateBehavioralEvent(eventId, parsed.data);
+    const event = await updateBehavioralEvent(eventId, id, parsed.data);
+    if (!event) {
+      return NextResponse.json(
+        { error: "Behavioral event not found" },
+        { status: 404 }
+      );
+    }
     return NextResponse.json({ event });
   } catch (err) {
     console.error(err);
@@ -32,13 +38,16 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; eventId: string }> }
 ) {
   try {
-    const { eventId } = await params;
-    await deleteBehavioralEvent(eventId);
+    const { id, eventId } = await params;
+    const deleted = await deleteBehavioralEvent(eventId, id);
+    if (!deleted) {
+      return NextResponse.json(
+        { error: "Behavioral event not found" },
+        { status: 404 }
+      );
+    }
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
-    if (err && typeof err === "object" && "code" in err && err.code === "P2025") {
-      return NextResponse.json({ success: true });
-    }
     console.error(err);
     return NextResponse.json(
       { error: "Failed to delete behavioral event" },

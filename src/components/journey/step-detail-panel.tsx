@@ -60,8 +60,6 @@ const KIND_OPTIONS: { value: StepKind; label: string; color: string }[] = [
   { value: "AB_SPLIT", label: "A/B Split", color: "text-teal-400" },
 ];
 
-const WAIT_UNITS = ["minutes", "hours", "days"] as const;
-
 export function StepDetailPanel({
   step,
   domainId,

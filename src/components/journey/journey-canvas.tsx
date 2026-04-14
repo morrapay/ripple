@@ -420,10 +420,8 @@ export function JourneyCanvas({ domainId, journeyId }: JourneyCanvasProps) {
         }
       );
       if (!res.ok) throw new Error("Failed to add step");
-      const data = await res.json();
-      setJourney(data.journey);
-      setNodes(stepsToNodes(data.journey.steps));
-      setEdges(stepsToEdges(data.journey.steps));
+      await res.json();
+      await fetchAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to add step");
     } finally {
@@ -472,17 +470,15 @@ export function JourneyCanvas({ domainId, journeyId }: JourneyCanvasProps) {
           }
         );
         if (!res.ok) throw new Error("Failed to insert step");
-        const data = await res.json();
-        setJourney(data.journey);
-        setNodes(stepsToNodes(data.journey.steps));
-        setEdges(stepsToEdges(data.journey.steps));
+        await res.json();
+        await fetchAll();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to insert step");
       } finally {
         setMutating(false);
       }
     },
-    [domainId, journeyId, setNodes, setEdges]
+    [domainId, journeyId]
   );
 
   insertHandlerRef.current = handleInsertStep;
@@ -499,10 +495,8 @@ export function JourneyCanvas({ domainId, journeyId }: JourneyCanvasProps) {
         }
       );
       if (!res.ok) throw new Error("Failed to save");
-      const data = await res.json();
-      setJourney(data.journey);
-      setNodes(stepsToNodes(data.journey.steps));
-      setEdges(stepsToEdges(data.journey.steps));
+      await res.json();
+      await fetchAll();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to save");
     }
@@ -520,11 +514,9 @@ export function JourneyCanvas({ domainId, journeyId }: JourneyCanvasProps) {
         const errBody = await res.json().catch(() => ({}));
         throw new Error(errBody.error ?? `Delete failed (${res.status})`);
       }
-      const data = await res.json();
+      await res.json();
       setSelectedStepId(null);
-      setJourney(data.journey);
-      setNodes(stepsToNodes(data.journey.steps));
-      setEdges(stepsToEdges(data.journey.steps));
+      await fetchAll();
     } catch (e) {
       console.error("Delete step error:", e);
       setError(e instanceof Error ? e.message : "Failed to delete");

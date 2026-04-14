@@ -76,15 +76,18 @@ export async function createJourneyStep(
 ) {
   let newOrder: number;
 
+  const orderScope =
+    input.journeyId != null ? { journeyId: input.journeyId } : { domainId };
+
   if (input.insertAfterOrder !== undefined) {
     await prisma.journeyStep.updateMany({
-      where: { domainId, order: { gt: input.insertAfterOrder } },
+      where: { ...orderScope, order: { gt: input.insertAfterOrder } },
       data: { order: { increment: 1 } },
     });
     newOrder = input.insertAfterOrder + 1;
   } else {
     const maxOrder = await prisma.journeyStep
-      .aggregate({ where: { domainId }, _max: { order: true } })
+      .aggregate({ where: orderScope, _max: { order: true } })
       .then((r) => r._max.order ?? -1);
     newOrder = maxOrder + 1;
   }
@@ -156,7 +159,8 @@ export async function updateJourneyStep(
 
   if (input.order !== undefined) {
     const steps = await prisma.journeyStep.findMany({
-      where: { domainId },
+      where:
+        step.journeyId != null ? { journeyId: step.journeyId } : { domainId },
       orderBy: { order: "asc" },
     });
     const fromIdx = steps.findIndex((s) => s.id === id);
@@ -274,8 +278,14 @@ export async function updateJourneyStep(
 }
 
 export async function deleteJourneyStep(id: string, domainId: string) {
+  const step = await prisma.journeyStep.findFirst({
+    where: { id, domainId },
+  });
+  if (!step) return null;
+
   const steps = await prisma.journeyStep.findMany({
-    where: { domainId },
+    where:
+      step.journeyId != null ? { journeyId: step.journeyId } : { domainId },
     orderBy: { order: "asc" },
   });
   const idx = steps.findIndex((s) => s.id === id);

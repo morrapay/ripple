@@ -138,15 +138,6 @@ function EmailFooter() {
   );
 }
 
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-      <span style={{ fontSize: 14, lineHeight: "100%", color: "#666666" }}>{label}</span>
-      <span style={{ fontSize: 16, fontWeight: 700, lineHeight: "150%" }}>{value}</span>
-    </div>
-  );
-}
-
 /* ───── Operational Email ───── */
 
 function OperationalEmailPreview({

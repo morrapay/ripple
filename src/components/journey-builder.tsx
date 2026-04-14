@@ -230,7 +230,6 @@ export function JourneyBuilder({ domainId }: JourneyBuilderProps) {
     }
   };
 
-  const hasFlows = flows.length > 0;
   const hasEvents = behavioralEvents.length > 0 || applicationEvents.length > 0;
   const flowMapDisabled = !hasEvents || mapping;
 

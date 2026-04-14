@@ -62,6 +62,12 @@ export async function PATCH(
       status: body.status,
       contentOutline: body.contentOutline,
     });
+    if (!communication) {
+      return NextResponse.json(
+        { error: "Communication not found" },
+        { status: 404 }
+      );
+    }
 
     await logAudit({
       domainId: id,
@@ -92,7 +98,13 @@ export async function DELETE(
       return NextResponse.json({ error: "Domain not found" }, { status: 404 });
     }
 
-    await deleteCommunication(commId, id);
+    const deleted = await deleteCommunication(commId, id);
+    if (!deleted) {
+      return NextResponse.json(
+        { error: "Communication not found" },
+        { status: 404 }
+      );
+    }
     await logAudit({
       domainId: id,
       entityType: "COMMUNICATION",

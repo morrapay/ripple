@@ -172,6 +172,11 @@ export async function updateCommunication(
   domainId: string,
   input: UpdateCommunicationInput
 ) {
+  const existing = await prisma.communication.findFirst({
+    where: { id, domainId },
+  });
+  if (!existing) return null;
+
   return prisma.communication.update({
     where: { id },
     data: {
@@ -201,6 +206,11 @@ export async function updateCommunication(
 }
 
 export async function deleteCommunication(id: string, domainId: string) {
+  const existing = await prisma.communication.findFirst({
+    where: { id, domainId },
+  });
+  if (!existing) return null;
+
   return prisma.communication.delete({
     where: { id },
   });

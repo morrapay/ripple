@@ -6,8 +6,11 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; flowId: string }> }
 ) {
   try {
-    const { flowId } = await params;
-    await deleteFlow(flowId);
+    const { id, flowId } = await params;
+    const deleted = await deleteFlow(flowId, id);
+    if (!deleted) {
+      return NextResponse.json({ error: "Flow not found" }, { status: 404 });
+    }
     return NextResponse.json({ success: true });
   } catch (err) {
     console.error(err);

@@ -26,8 +26,14 @@ export async function createBehavioralEvent(
 
 export async function updateBehavioralEvent(
   id: string,
+  domainId: string,
   input: UpdateBehavioralEventInput
 ) {
+  const existing = await prisma.behavioralEvent.findFirst({
+    where: { id, domainId },
+  });
+  if (!existing) return null;
+
   return prisma.behavioralEvent.update({
     where: { id },
     data: {
@@ -45,7 +51,12 @@ export async function updateBehavioralEvent(
   });
 }
 
-export async function deleteBehavioralEvent(id: string) {
+export async function deleteBehavioralEvent(id: string, domainId: string) {
+  const existing = await prisma.behavioralEvent.findFirst({
+    where: { id, domainId },
+  });
+  if (!existing) return null;
+
   return prisma.behavioralEvent.delete({
     where: { id },
   });

@@ -20,7 +20,10 @@ export async function createFlow(domainId: string, input: CreateFlowInput) {
   });
 }
 
-export async function deleteFlow(id: string) {
+export async function deleteFlow(id: string, domainId: string) {
+  const existing = await prisma.flow.findFirst({ where: { id, domainId } });
+  if (!existing) return null;
+
   return prisma.flow.delete({
     where: { id },
   });

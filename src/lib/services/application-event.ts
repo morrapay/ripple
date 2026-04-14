@@ -35,8 +35,14 @@ export async function createApplicationEvent(
 
 export async function updateApplicationEvent(
   id: string,
+  domainId: string,
   input: UpdateApplicationEventInput
 ) {
+  const existing = await prisma.applicationEvent.findFirst({
+    where: { id, domainId },
+  });
+  if (!existing) return null;
+
   return prisma.applicationEvent.update({
     where: { id },
     data: {
@@ -63,7 +69,12 @@ export async function updateApplicationEvent(
   });
 }
 
-export async function deleteApplicationEvent(id: string) {
+export async function deleteApplicationEvent(id: string, domainId: string) {
+  const existing = await prisma.applicationEvent.findFirst({
+    where: { id, domainId },
+  });
+  if (!existing) return null;
+
   return prisma.applicationEvent.delete({
     where: { id },
   });
