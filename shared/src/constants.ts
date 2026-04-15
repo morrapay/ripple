@@ -1,6 +1,8 @@
 // ─── Communication Constants ────────────────────────
 
-export type CommType = "PROMOTIONAL" | "TRANSACTIONAL" | "OPERATIONAL";
+import type { CommunicationType } from "./types";
+
+export type CommType = CommunicationType;
 
 export const COMMUNICATION_TYPES: { value: CommType; label: string; description: string; color: string }[] = [
   {
@@ -71,15 +73,18 @@ export function getChannelConfig(value: string | null | undefined) {
 
 // ─── Journey Constants ──────────────────────────────
 
-export type StepKind = "ACTION" | "SYSTEM_TRIGGER" | "COMMUNICATION" | "STATE";
+import type { StepKind } from "./types";
 
-export const STEP_KINDS: StepKind[] = ["ACTION", "SYSTEM_TRIGGER", "COMMUNICATION", "STATE"];
+export const STEP_KINDS: StepKind[] = ["ACTION", "SYSTEM_TRIGGER", "COMMUNICATION", "STATE", "DECISION", "WAIT_DELAY", "AB_SPLIT"];
 
 export const KIND_LABELS: Record<StepKind, string> = {
   ACTION: "Action",
   SYSTEM_TRIGGER: "System Trigger",
   COMMUNICATION: "Communication",
   STATE: "State",
+  DECISION: "Decision",
+  WAIT_DELAY: "Wait / Delay",
+  AB_SPLIT: "A/B Split",
 };
 
 export const KIND_COLORS: Record<StepKind, {
@@ -116,6 +121,27 @@ export const KIND_COLORS: Record<StepKind, {
     text: "text-zinc-400",
     dot: "bg-zinc-400",
     badge: "bg-zinc-500/20 text-zinc-400",
+  },
+  DECISION: {
+    bg: "bg-emerald-500/10",
+    border: "border-emerald-500/30",
+    text: "text-emerald-300",
+    dot: "bg-emerald-400",
+    badge: "bg-emerald-500/20 text-emerald-400",
+  },
+  WAIT_DELAY: {
+    bg: "bg-orange-500/10",
+    border: "border-orange-500/30",
+    text: "text-orange-300",
+    dot: "bg-orange-400",
+    badge: "bg-orange-500/20 text-orange-400",
+  },
+  AB_SPLIT: {
+    bg: "bg-pink-500/10",
+    border: "border-pink-500/30",
+    text: "text-pink-300",
+    dot: "bg-pink-400",
+    badge: "bg-pink-500/20 text-pink-400",
   },
 };
 
@@ -158,5 +184,29 @@ export const KIND_NODE_STYLES: Record<StepKind, {
     badge: "bg-zinc-500/20 text-zinc-400",
     label: "State",
     icon: "M9 12l2 2 4-4m6 2a9 9 0 1 1-18 0 9 9 0 0 1 18 0z",
+  },
+  DECISION: {
+    bg: "bg-emerald-950/60",
+    border: "border-emerald-500/40",
+    text: "text-emerald-200",
+    badge: "bg-emerald-500/20 text-emerald-400",
+    label: "Decision",
+    icon: "M9 20l-5.447-2.724A1 1 0 0 1 3 16.382V5.618a1 1 0 0 1 1.447-.894L9 7m0 13l6-3m-6 3V7m6 10l5.447 2.724A1 1 0 0 0 21 18.382V7.618a1 1 0 0 0-.553-.894L15 4m0 13V4m0 0L9 7",
+  },
+  WAIT_DELAY: {
+    bg: "bg-orange-950/60",
+    border: "border-orange-500/40",
+    text: "text-orange-200",
+    badge: "bg-orange-500/20 text-orange-400",
+    label: "Wait / Delay",
+    icon: "M12 8v4l3 3m6-3a9 9 0 1 1-18 0 9 9 0 0 1 18 0z",
+  },
+  AB_SPLIT: {
+    bg: "bg-pink-950/60",
+    border: "border-pink-500/40",
+    text: "text-pink-200",
+    badge: "bg-pink-500/20 text-pink-400",
+    label: "A/B Split",
+    icon: "M4 4v5h.582m15.356 2A8.001 8.001 0 0 0 4.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 0 1-15.357-2m15.357 2H15",
   },
 };
