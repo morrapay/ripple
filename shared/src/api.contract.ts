@@ -1,655 +1,299 @@
-// ═══════════════════════════════════════════════════════
-// api.contract.ts — Complete API contract
-// Every endpoint, method, request body, and response shape.
-// Both Cursor (backend) and Lovable (frontend) MUST respect this.
-// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// api.contract.ts — Typed API endpoint contracts
+//
+// This file defines the request/response shape for every API
+// endpoint that the frontend (Lovable) calls and the backend
+// (Cursor) implements.
+//
+// RULES:
+//   - Every endpoint is an exported interface
+//   - Lovable imports these types; it does NOT invent its own
+//   - Cursor implements handlers that conform to these types
+//   - If a shape needs to change, change it HERE first, then
+//     update both sides
+//
+// BREAKING CHANGES:
+//   - Removing or renaming an endpoint type
+//   - Changing a response field from required to removed
+//   - Changing a request field from optional to required
+//   - Changing pagination shape (page/pageSize/total)
+//
+// NON-BREAKING:
+//   - Adding a new endpoint type
+//   - Adding optional fields to a request or response
+//   - Adding new query filter options
+// ═══════════════════════════════════════════════════════════════
 
+import type { ApiResponse, ApiError } from "./errors";
+import type { Event } from "./events.schema";
 import type {
-  Journey, JourneyStep, JourneyEdge, BehavioralEvent, ApplicationEvent,
-  Communication, CommunicationDependency, Flow, Ticket, Comment,
-  ApprovalRequest, Notification, PreferenceCategory, AuditLog,
-  SearchResults, ApiError, StepKind, EventStatus, BehavioralEventType,
-  ApplicationEventType, CommunicationType, CommunicationStatus,
-  ApprovalStatus, DependencyType, FlowType, AuditEntityType,
-} from "./types";
+  Journey,
+  JourneySummary,
+  JourneyStatus,
+  StepInput,
+} from "./journey.schema";
 
-// ─── Helper: wraps every endpoint definition ──────────
+// ─── Pagination ───────────────────────────────────────────────
 
-interface Endpoint<
-  TMethod extends string,
-  TPath extends string,
-  TBody = void,
-  TQuery = void,
-  TResponse = void,
-> {
-  method: TMethod;
-  path: TPath;
-  body: TBody;
-  query: TQuery;
-  response: TResponse;
+/**
+ * Pagination parameters sent by the frontend as query params.
+ *
+ * Lovable can assume:
+ *   - `page` is 1-based (first page is 1, not 0)
+ *   - `pageSize` defaults to 20 if omitted
+ *   - Backend will clamp pageSize to [1, 100]
+ */
+export interface PaginationParams {
+  /** 1-based page number. Defaults to 1. */
+  page?: number;
+
+  /** Items per page. Defaults to 20. Max 100. */
+  pageSize?: number;
 }
 
-// ═══════════════════════════════════════════════════════
-// JOURNEYS
-// ═══════════════════════════════════════════════════════
+/**
+ * Pagination metadata returned in every paginated response.
+ *
+ * Lovable can assume:
+ *   - `total` is the total count BEFORE pagination
+ *   - `page` and `pageSize` echo back what was requested
+ *     (after clamping / defaulting)
+ *   - `totalPages` = Math.ceil(total / pageSize)
+ */
+export interface PaginationMeta {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
 
-export type ListJourneys = Endpoint<
-  "GET",
-  "/api/domains/:id/journeys",
-  void,
-  void,
-  { journeys: Journey[] }
->;
+/**
+ * Generic paginated response wrapper.
+ * List endpoints return this shape.
+ */
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: PaginationMeta;
+}
 
-export type CreateJourney = Endpoint<
-  "POST",
-  "/api/domains/:id/journeys",
-  { name?: string; description?: string; audience?: string; objective?: string },
-  void,
-  { journey: Journey }
->;
+// ═══════════════════════════════════════════════════════════════
+// GET /api/journeys
+// ═══════════════════════════════════════════════════════════════
+//
+// Lists all journeys for the current context (domain scoped
+// server-side via auth). Returns summaries without steps.
+//
+// PURPOSE:
+//   Used by the journey list/dashboard page. Lovable renders
+//   cards or table rows from these summaries.
+//
+// LOVABLE CAN ASSUME:
+//   - Response is always paginated, even if there's only one page
+//   - Items are sorted by updatedAt descending by default
+//   - `steps` is NOT included (use GET /api/journeys/:id for that)
+//   - Filters are optional; omitting all returns everything
+//
+// BREAKING CHANGE:
+//   Removing `status` or `name` from JourneySummary,
+//   changing pagination shape.
+// ═══════════════════════════════════════════════════════════════
 
-export type GetJourney = Endpoint<
-  "GET",
-  "/api/domains/:id/journeys/:journeyId",
-  void,
-  void,
-  { journey: Journey }
->;
+export interface ListJourneysRequest {
+  query: PaginationParams & {
+    /** Filter by journey status */
+    status?: JourneyStatus;
 
-export type UpdateJourney = Endpoint<
-  "PATCH",
-  "/api/domains/:id/journeys/:journeyId",
-  {
-    name?: string;
-    description?: string;
-    audience?: string;
-    objective?: string;
-    coverImage?: string;
-    entryCriteria?: Record<string, unknown>;
-    exitCriteria?: Record<string, unknown>;
-  },
-  void,
-  { journey: Journey }
->;
-
-export type DeleteJourney = Endpoint<
-  "DELETE",
-  "/api/domains/:id/journeys/:journeyId",
-  void,
-  void,
-  { success: true }
->;
-
-export type SplitJourney = Endpoint<
-  "POST",
-  "/api/domains/:id/journeys/:journeyId/split",
-  { stepId: string },
-  void,
-  { originalJourneyId: string; newJourney: Journey | null }
->;
-
-// ═══════════════════════════════════════════════════════
-// JOURNEY STEPS (nested under journey)
-// ═══════════════════════════════════════════════════════
-
-export type CreateJourneyStep = Endpoint<
-  "POST",
-  "/api/domains/:id/journeys/:journeyId/steps",
-  {
-    name?: string;
-    description?: string;
-    kind?: StepKind;
-    posX?: number;
-    posY?: number;
-    behavioralEventId?: string;
-    applicationEventId?: string;
-    communicationPointName?: string;
-    triggerEvent?: string;
-    insertAfterOrder?: number;
-  },
-  void,
-  { journey: Journey | null }
->;
-
-export type UpdateJourneyStep = Endpoint<
-  "PATCH",
-  "/api/domains/:id/journeys/:journeyId/steps/:stepId",
-  {
-    name?: string;
-    description?: string;
-    kind?: StepKind;
-    order?: number;
-    posX?: number;
-    posY?: number;
-    imageUrl?: string;
-    behavioralEventId?: string;
-    applicationEventId?: string;
-    communicationPointName?: string;
-    triggerEvent?: string;
-    conditionConfig?: Record<string, unknown>;
-    waitDuration?: string;
-    splitVariants?: { name: string; percentage: number }[];
-  },
-  void,
-  { journey: Journey | null }
->;
-
-export type DeleteJourneyStep = Endpoint<
-  "DELETE",
-  "/api/domains/:id/journeys/:journeyId/steps/:stepId",
-  void,
-  void,
-  { journey: Journey | null }
->;
-
-// ═══════════════════════════════════════════════════════
-// JOURNEY EDGES
-// ═══════════════════════════════════════════════════════
-
-export type ListJourneyEdges = Endpoint<
-  "GET",
-  "/api/domains/:id/journeys/:journeyId/edges",
-  void,
-  void,
-  { edges: JourneyEdge[] }
->;
-
-export type CreateJourneyEdge = Endpoint<
-  "POST",
-  "/api/domains/:id/journeys/:journeyId/edges",
-  {
-    sourceStepId: string;
-    targetStepId: string;
-    label?: string | null;
-    condition?: Record<string, unknown>;
-    sortOrder?: number;
-  },
-  void,
-  { edge: JourneyEdge }
->;
-
-export type DeleteJourneyEdge = Endpoint<
-  "DELETE",
-  "/api/domains/:id/journeys/:journeyId/edges",
-  void,
-  { edgeId: string },
-  { success: true }
->;
-
-// ═══════════════════════════════════════════════════════
-// BEHAVIORAL EVENTS
-// ═══════════════════════════════════════════════════════
-
-export type ListBehavioralEvents = Endpoint<
-  "GET",
-  "/api/domains/:id/behavioral-events",
-  void,
-  void,
-  { events: BehavioralEvent[] }
->;
-
-export type CreateBehavioralEvent = Endpoint<
-  "POST",
-  "/api/domains/:id/behavioral-events",
-  {
-    eventName: string;
-    eventType: BehavioralEventType;
-    description?: string;
-    userProperties?: string[];
-    eventProperties: string[];
-  },
-  void,
-  { event: BehavioralEvent }
->;
-
-export type CreateBehavioralEventsBulk = Endpoint<
-  "POST",
-  "/api/domains/:id/behavioral-events",
-  {
-    bulk: true;
-    events: {
-      eventName: string;
-      eventType: BehavioralEventType;
-      description?: string;
-      userProperties?: string[];
-      eventProperties: string[];
-    }[];
-  },
-  void,
-  { events: BehavioralEvent[] }
->;
-
-export type UpdateBehavioralEvent = Endpoint<
-  "PATCH",
-  "/api/domains/:id/behavioral-events/:eventId",
-  {
-    eventName?: string;
-    eventType?: BehavioralEventType;
-    description?: string | null;
-    status?: EventStatus;
-    userProperties?: string[] | null;
-    eventProperties?: string[];
-  },
-  void,
-  { event: BehavioralEvent }
->;
-
-export type DeleteBehavioralEvent = Endpoint<
-  "DELETE",
-  "/api/domains/:id/behavioral-events/:eventId",
-  void,
-  void,
-  { success: true }
->;
-
-// ═══════════════════════════════════════════════════════
-// APPLICATION EVENTS
-// ═══════════════════════════════════════════════════════
-
-export type ListApplicationEvents = Endpoint<
-  "GET",
-  "/api/domains/:id/application-events",
-  void,
-  void,
-  { events: ApplicationEvent[] }
->;
-
-export type CreateApplicationEvent = Endpoint<
-  "POST",
-  "/api/domains/:id/application-events",
-  {
-    eventName: string;
-    eventType: ApplicationEventType;
-    description?: string;
-    handshakeContext?: Record<string, unknown>;
-    businessRationale?: Record<string, unknown>;
-    producerMetadata?: Record<string, unknown>;
-  },
-  void,
-  { event: ApplicationEvent }
->;
-
-export type UpdateApplicationEvent = Endpoint<
-  "PATCH",
-  "/api/domains/:id/application-events/:eventId",
-  {
-    eventName?: string;
-    eventType?: ApplicationEventType;
-    description?: string | null;
-    status?: EventStatus;
-    handshakeContext?: Record<string, unknown>;
-    businessRationale?: Record<string, unknown> | null;
-    producerMetadata?: Record<string, unknown> | null;
-  },
-  void,
-  { event: ApplicationEvent }
->;
-
-export type DeleteApplicationEvent = Endpoint<
-  "DELETE",
-  "/api/domains/:id/application-events/:eventId",
-  void,
-  void,
-  { success: true }
->;
-
-// ═══════════════════════════════════════════════════════
-// COMMUNICATIONS
-// ═══════════════════════════════════════════════════════
-
-export type ListCommunications = Endpoint<
-  "GET",
-  "/api/domains/:id/communications",
-  void,
-  {
+    /** Free-text search across name and description */
     search?: string;
-    channel?: string;
-    status?: CommunicationStatus;
-    tag?: string;
-    sortBy?: "updatedAt" | "name" | "channel" | "status";
-    sortOrder?: "asc" | "desc";
-  },
-  { communications: Communication[]; pendingPoints: { id: string; name: string }[] }
->;
+  };
+}
 
-export type CreateCommunication = Endpoint<
-  "POST",
-  "/api/domains/:id/communications",
-  {
-    name?: string;
-    description?: string;
-    communicationPointId?: string;
-    templateId?: string;
-    channel?: string;
-    communicationType?: CommunicationType;
-    category?: string;
-    preferenceGroup?: string;
-    tags?: string[];
-    owner?: string;
-    status?: CommunicationStatus;
-  },
-  void,
-  { communication: Communication }
->;
+export type ListJourneysResponse = PaginatedResponse<JourneySummary>;
 
-export type GetCommunication = Endpoint<
-  "GET",
-  "/api/domains/:id/communications/:commId",
-  void,
-  void,
-  { communication: Communication }
->;
+// ═══════════════════════════════════════════════════════════════
+// GET /api/journeys/:id
+// ═══════════════════════════════════════════════════════════════
+//
+// Fetches a single journey with all its steps.
+//
+// PURPOSE:
+//   Used by the journey detail/canvas page. Lovable gets the
+//   full journey including ordered steps to render the flow.
+//
+// LOVABLE CAN ASSUME:
+//   - `steps` is always an array (empty for a new journey)
+//   - Steps are sorted by `order` ascending
+//   - Step `config` shape matches the step's `type`
+//     (use the discriminated union to narrow)
+//   - Returns 404 ApiError if the journey doesn't exist
+//
+// BREAKING CHANGE:
+//   Removing `steps` from the response, changing step union shape.
+// ═══════════════════════════════════════════════════════════════
 
-export type UpdateCommunication = Endpoint<
-  "PATCH",
-  "/api/domains/:id/communications/:commId",
-  {
-    name?: string;
-    description?: string;
-    templateId?: string;
-    channel?: string;
-    communicationType?: CommunicationType;
-    category?: string;
-    preferenceGroup?: string;
-    preferenceCategories?: string[];
-    tags?: string[];
-    owner?: string;
-    status?: CommunicationStatus;
-    contentOutline?: Record<string, unknown>;
-  },
-  void,
-  { communication: Communication }
->;
+export interface GetJourneyRequest {
+  params: {
+    id: string;
+  };
+}
 
-export type DeleteCommunication = Endpoint<
-  "DELETE",
-  "/api/domains/:id/communications/:commId",
-  void,
-  void,
-  { success: true }
->;
+export type GetJourneyResponse = ApiResponse<Journey>;
 
-export type ApproveCommunication = Endpoint<
-  "POST",
-  "/api/domains/:id/communications/:commId/approve",
-  { approvedBy?: string },
-  void,
-  { communication: Communication; tickets: [Ticket, Ticket] }
->;
+// ═══════════════════════════════════════════════════════════════
+// POST /api/journeys
+// ═══════════════════════════════════════════════════════════════
+//
+// Creates a new journey. Steps can be included in the initial
+// payload or added later via PUT.
+//
+// PURPOSE:
+//   Called when the user clicks "Create Journey" and submits
+//   the creation form (name, audience, objective).
+//
+// LOVABLE CAN ASSUME:
+//   - Response includes the created journey with its generated `id`
+//   - `status` defaults to "draft" server-side
+//   - `steps` defaults to [] if omitted
+//   - `name` is the only required field
+//   - Returns VALIDATION_ERROR if name is empty
+//
+// BREAKING CHANGE:
+//   Making `audience` or `objective` required,
+//   changing the response shape.
+// ═══════════════════════════════════════════════════════════════
 
-export type RejectCommunication = Endpoint<
-  "POST",
-  "/api/domains/:id/communications/:commId/reject",
-  void,
-  void,
-  { communication: Communication }
->;
-
-export type SubmitCommunicationReview = Endpoint<
-  "POST",
-  "/api/domains/:id/communications/:commId/submit-review",
-  void,
-  void,
-  { communication: Communication }
->;
-
-export type TestSendCommunication = Endpoint<
-  "POST",
-  "/api/domains/:id/communications/:commId/test-send",
-  { recipientEmail: string },
-  void,
-  { success: true; message: string; previewUrl: null }
->;
-
-export type SuggestContent = Endpoint<
-  "POST",
-  "/api/domains/:id/communications/suggest-content",
-  {
-    channel?: string;
-    communicationType?: string;
-    category?: string;
-    triggerEvent?: string;
-    commName?: string;
-  },
-  void,
-  { content: Record<string, unknown> }
->;
-
-export type ListCommunicationTickets = Endpoint<
-  "GET",
-  "/api/domains/:id/communications/:commId/tickets",
-  void,
-  void,
-  { tickets: Ticket[] }
->;
-
-// ═══════════════════════════════════════════════════════
-// FLOWS
-// ═══════════════════════════════════════════════════════
-
-export type ListFlows = Endpoint<
-  "GET",
-  "/api/domains/:id/flows",
-  void,
-  void,
-  { flows: Flow[] }
->;
-
-export type CreateFlow = Endpoint<
-  "POST",
-  "/api/domains/:id/flows",
-  { name: string; flowType: FlowType; fileUrl?: string | null; figmaLink?: string | null },
-  void,
-  { flow: Flow }
->;
-
-export type DeleteFlow = Endpoint<
-  "DELETE",
-  "/api/domains/:id/flows/:flowId",
-  void,
-  void,
-  { success: true }
->;
-
-export type ImportFlowsFromFigma = Endpoint<
-  "POST",
-  "/api/domains/:id/flows/import-from-figma",
-  { figmaUrl: string },
-  void,
-  { flows: Flow[] }
->;
-
-// ═══════════════════════════════════════════════════════
-// COMMENTS
-// ═══════════════════════════════════════════════════════
-
-export type ListComments = Endpoint<
-  "GET",
-  "/api/domains/:id/comments",
-  void,
-  { entityType: string; entityId: string },
-  { comments: Comment[] }
->;
-
-export type CreateComment = Endpoint<
-  "POST",
-  "/api/domains/:id/comments",
-  { entityType: string; entityId: string; text: string; parentId?: string | null },
-  void,
-  { comment: Comment }
->;
-
-export type UpdateComment = Endpoint<
-  "PATCH",
-  "/api/domains/:id/comments/:commentId",
-  { text?: string; resolved?: boolean },
-  void,
-  { comment: Comment }
->;
-
-export type DeleteComment = Endpoint<
-  "DELETE",
-  "/api/domains/:id/comments/:commentId",
-  void,
-  void,
-  { success: true }
->;
-
-// ═══════════════════════════════════════════════════════
-// APPROVALS
-// ═══════════════════════════════════════════════════════
-
-export type ListApprovals = Endpoint<
-  "GET",
-  "/api/domains/:id/approvals",
-  void,
-  void,
-  { approvals: ApprovalRequest[] }
->;
-
-export type CreateApproval = Endpoint<
-  "POST",
-  "/api/domains/:id/approvals",
-  { type?: string },
-  void,
-  { approval: ApprovalRequest }
->;
-
-export type ReviewApproval = Endpoint<
-  "PATCH",
-  "/api/domains/:id/approvals/:approvalId",
-  { status: "APPROVED" | "REJECTED"; note?: string },
-  void,
-  { approval: ApprovalRequest }
->;
-
-// ═══════════════════════════════════════════════════════
-// PREFERENCE CATEGORIES
-// ═══════════════════════════════════════════════════════
-
-export type ListPreferenceCategories = Endpoint<
-  "GET",
-  "/api/domains/:id/preference-categories",
-  void,
-  void,
-  { categories: PreferenceCategory[] }
->;
-
-export type CreatePreferenceCategory = Endpoint<
-  "POST",
-  "/api/domains/:id/preference-categories",
-  {
+export interface CreateJourneyRequest {
+  body: {
+    /** Required. Display name for the journey. */
     name: string;
-    description?: string;
-    displayOrder?: number;
-    canOptOut?: boolean;
-    mandatory?: boolean;
-    icon?: string | null;
-  },
-  void,
-  { category: PreferenceCategory }
->;
 
-export type UpdatePreferenceCategory = Endpoint<
-  "PATCH",
-  "/api/domains/:id/preference-categories/:catId",
-  {
+    description?: string | null;
+    audience?: string | null;
+    objective?: string | null;
+
+    /**
+     * Optional initial steps. If omitted, journey starts empty.
+     * Order is inferred from array position (0-based).
+     */
+    steps?: StepInput[];
+  };
+}
+
+export type CreateJourneyResponse = ApiResponse<Journey>;
+
+// ═══════════════════════════════════════════════════════════════
+// PUT /api/journeys/:id
+// ═══════════════════════════════════════════════════════════════
+//
+// Full replacement update of a journey and its steps.
+//
+// PURPOSE:
+//   Called when the user saves changes on the journey canvas.
+//   The frontend sends the COMPLETE current state — the backend
+//   replaces everything. This is intentionally PUT (not PATCH)
+//   to avoid merge ambiguity with ordered step arrays.
+//
+// LOVABLE CAN ASSUME:
+//   - The full step array replaces what's on the server
+//     (steps not in the array are deleted)
+//   - Step `order` is inferred from array position
+//   - Existing step IDs are preserved; new steps (without id)
+//     get server-generated IDs in the response
+//   - Returns 404 if the journey doesn't exist
+//   - Returns VALIDATION_ERROR for invalid step configs
+//   - Only "draft" journeys can be fully updated;
+//     "active" journeys return FORBIDDEN
+//
+// BREAKING CHANGE:
+//   Switching to PATCH semantics, changing step identity rules.
+// ═══════════════════════════════════════════════════════════════
+
+export interface UpdateJourneyRequest {
+  params: {
+    id: string;
+  };
+  body: {
     name?: string;
     description?: string | null;
-    canOptOut?: boolean;
-    mandatory?: boolean;
-    icon?: string | null;
-    displayOrder?: number;
-  },
-  void,
-  { category: PreferenceCategory }
->;
+    audience?: string | null;
+    objective?: string | null;
+    status?: JourneyStatus;
 
-export type DeletePreferenceCategory = Endpoint<
-  "DELETE",
-  "/api/domains/:id/preference-categories/:catId",
-  void,
-  void,
-  { success: true }
->;
+    /**
+     * The complete ordered list of steps.
+     * Replaces the server-side step list entirely.
+     * Array position determines step order.
+     */
+    steps?: StepInput[];
+  };
+}
 
-// ═══════════════════════════════════════════════════════
-// COMMUNICATION DEPENDENCIES
-// ═══════════════════════════════════════════════════════
+export type UpdateJourneyResponse = ApiResponse<Journey>;
 
-export type ListDependencies = Endpoint<
-  "GET",
-  "/api/domains/:id/communication-dependencies",
-  void,
-  void,
-  { dependencies: CommunicationDependency[] }
->;
+// ═══════════════════════════════════════════════════════════════
+// DELETE /api/journeys/:id
+// ═══════════════════════════════════════════════════════════════
+//
+// Permanently deletes a journey and all its steps.
+//
+// PURPOSE:
+//   Called from the journey list or detail page when the user
+//   confirms deletion.
+//
+// LOVABLE CAN ASSUME:
+//   - Returns 204-equivalent (success with no data) on success
+//   - Returns 404 if the journey doesn't exist
+//   - Deletion is permanent and cascades to steps
+//   - Active journeys CAN be deleted (the backend handles cleanup)
+//
+// BREAKING CHANGE:
+//   Returning a body where none was expected, requiring
+//   extra confirmation params.
+// ═══════════════════════════════════════════════════════════════
 
-export type CreateDependency = Endpoint<
-  "POST",
-  "/api/domains/:id/communication-dependencies",
-  { fromCommunicationId: string; toCommunicationId: string; type: DependencyType },
-  void,
-  { dependency: CommunicationDependency }
->;
+export interface DeleteJourneyRequest {
+  params: {
+    id: string;
+  };
+}
 
-export type DeleteDependency = Endpoint<
-  "DELETE",
-  "/api/domains/:id/communication-dependencies/:depId",
-  void,
-  void,
-  { success: true }
->;
+export type DeleteJourneyResponse = ApiResponse<{ deleted: true }>;
 
-// ═══════════════════════════════════════════════════════
-// SEARCH
-// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// GET /api/events
+// ═══════════════════════════════════════════════════════════════
+//
+// Lists all known event definitions. These are the events that
+// can be used as triggers in journey steps.
+//
+// PURPOSE:
+//   Used to populate the event picker dropdown when creating
+//   or editing an event-type journey step.
+//
+// LOVABLE CAN ASSUME:
+//   - Response is paginated
+//   - Only "active" events are returned by default
+//     (pass status=draft to include drafts, e.g. for admin views)
+//   - Events are sorted by displayName ascending by default
+//   - `properties` is always an array (used to show available
+//     filter conditions in the step editor)
+//
+// BREAKING CHANGE:
+//   Removing `name` or `properties` from Event,
+//   changing pagination shape.
+// ═══════════════════════════════════════════════════════════════
 
-export type GlobalSearch = Endpoint<
-  "GET",
-  "/api/search",
-  void,
-  { domainId: string; q?: string },
-  { results: SearchResults }
->;
+export interface ListEventsRequest {
+  query: PaginationParams & {
+    /** Filter by event category */
+    category?: "behavioral" | "system";
 
-// ═══════════════════════════════════════════════════════
-// NOTIFICATIONS
-// ═══════════════════════════════════════════════════════
+    /** Filter by event status. Defaults to "active" if omitted. */
+    status?: "draft" | "active" | "archived";
 
-export type ListNotifications = Endpoint<
-  "GET",
-  "/api/notifications",
-  void,
-  void,
-  { notifications: Notification[]; unreadCount: number }
->;
+    /** Free-text search across name and displayName */
+    search?: string;
+  };
+}
 
-export type MarkNotificationRead = Endpoint<
-  "PATCH",
-  "/api/notifications/:id",
-  void,
-  void,
-  { ok: true }
->;
-
-export type MarkAllNotificationsRead = Endpoint<
-  "POST",
-  "/api/notifications/mark-all-read",
-  void,
-  void,
-  { ok: true }
->;
-
-// ═══════════════════════════════════════════════════════
-// AUDIT
-// ═══════════════════════════════════════════════════════
-
-export type ListAuditLogs = Endpoint<
-  "GET",
-  "/api/domains/:id/audit",
-  void,
-  { entityType?: AuditEntityType; entityId?: string },
-  { logs: AuditLog[] }
->;
+export type ListEventsResponse = PaginatedResponse<Event>;

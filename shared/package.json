@@ -8,9 +8,6 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc"
   },
-  "dependencies": {
-    "zod": "^3.22.0"
-  },
   "devDependencies": {
     "typescript": "^5.7.0"
   }

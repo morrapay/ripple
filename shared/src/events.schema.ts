@@ -1,142 +1,111 @@
-// ═══════════════════════════════════════════════════════
-// events.schema.ts — Zod validation schemas for events
-// Used by backend for request validation and by frontend
-// for form validation. Single source of truth.
-// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// events.schema.ts — Application event contracts
+//
+// Events are the atoms of the Ripple domain. They represent things
+// that happen in the product (user clicks, API calls, system triggers)
+// and are referenced by journey steps as triggers.
+//
+// This file is BACKEND-AGNOSTIC: no DB column types, no ORM imports.
+// IDs are opaque strings. Timestamps are ISO 8601 strings.
+//
+// BREAKING CHANGES:
+//   - Removing a field from Event
+//   - Changing EventCategory or EventStatus values
+//   - Changing id from string to number
+//
+// NON-BREAKING:
+//   - Adding new EventCategory values
+//   - Adding optional fields to Event
+//   - Adding new EventStatus values
+// ═══════════════════════════════════════════════════════════════
 
-import { z } from "zod";
+/**
+ * High-level event category.
+ *
+ * "behavioral" — Triggered by user interaction in the product
+ *   (page views, clicks, form submissions, tooltip views, etc.)
+ *
+ * "system" — Triggered by backend processes
+ *   (API responses, scheduled jobs, state transitions, webhooks)
+ *
+ * Lovable can assume: every event has exactly one of these categories.
+ */
+export type EventCategory = "behavioral" | "system";
 
-// ─── Behavioral Event Schemas ─────────────────────────
+/**
+ * Lifecycle status of an event definition.
+ *
+ * "draft"    — Event is being defined, not yet usable in journeys
+ * "active"   — Event is approved and can be used as a journey trigger
+ * "archived" — Event is deprecated; existing references still work,
+ *              but it cannot be selected for new steps
+ *
+ * Lovable can assume:
+ *   - Only "active" events appear in the step trigger dropdown
+ *   - "archived" events still render correctly if already in a journey
+ */
+export type EventStatus = "draft" | "active" | "archived";
 
-export const behavioralEventTypeSchema = z.enum([
-  "page_view", "click", "submit", "field_change",
-  "error_message_view", "error_message", "error",
-  "tooltip_view", "tooltip", "popup_view", "popup",
-  "toast", "experiment_trigger",
-]);
+/**
+ * A single event definition.
+ *
+ * This is NOT a fired event instance — it's the schema/template
+ * that describes what the event looks like. Think of it as the
+ * event in a tracking plan.
+ *
+ * Lovable can assume:
+ *   - `id` is globally unique and stable (never changes)
+ *   - `name` is the machine-readable event name (e.g. "checkout_started")
+ *   - `displayName` is the human-readable label (e.g. "Checkout Started")
+ *   - `properties` lists the payload keys the event carries
+ *   - `createdAt` / `updatedAt` are ISO 8601 strings
+ */
+export interface Event {
+  id: string;
 
-export const eventStatusSchema = z.enum(["DRAFT", "READY", "APPROVED"]);
+  /** Machine-readable event name — used in code and as trigger references */
+  name: string;
 
-export const createBehavioralEventSchema = z.object({
-  eventName: z.string().min(1, "Event name is required").max(200),
-  eventType: behavioralEventTypeSchema,
-  description: z.string().max(500).optional(),
-  userProperties: z.array(z.string()).optional(),
-  eventProperties: z.array(z.string()).min(1, "At least one event property is required"),
-});
+  /** Human-friendly label for UI display */
+  displayName: string;
 
-export const updateBehavioralEventSchema = z.object({
-  eventName: z.string().min(1).max(200).optional(),
-  eventType: behavioralEventTypeSchema.optional(),
-  description: z.string().max(500).nullable().optional(),
-  status: eventStatusSchema.optional(),
-  userProperties: z.array(z.string()).nullable().optional(),
-  eventProperties: z.array(z.string()).min(1).optional(),
-});
+  category: EventCategory;
+  status: EventStatus;
 
-export type CreateBehavioralEventInput = z.infer<typeof createBehavioralEventSchema>;
-export type UpdateBehavioralEventInput = z.infer<typeof updateBehavioralEventSchema>;
+  /** Optional longer description explaining when this event fires */
+  description: string | null;
 
-// ─── Application Event Schemas ────────────────────────
+  /**
+   * List of property names this event carries in its payload.
+   * Example: ["product_id", "currency", "amount"]
+   *
+   * Lovable can assume: this is always an array (possibly empty).
+   * These are display-only — the frontend does not need to validate payloads.
+   */
+  properties: string[];
 
-export const applicationEventTypeSchema = z.enum(["API_TRIGGERED", "OFFLINE_PROCESS"]);
+  /** ISO 8601 */
+  createdAt: string;
 
-export const createApplicationEventSchema = z.object({
-  eventName: z.string().min(1, "Event name is required").max(200),
-  eventType: applicationEventTypeSchema,
-  description: z.string().max(500).optional(),
-  handshakeContext: z.record(z.unknown()).default({}),
-  businessRationale: z.record(z.unknown()).optional(),
-  producerMetadata: z.record(z.unknown()).optional(),
-});
+  /** ISO 8601 */
+  updatedAt: string;
+}
 
-export const updateApplicationEventSchema = z.object({
-  eventName: z.string().min(1).max(200).optional(),
-  eventType: applicationEventTypeSchema.optional(),
-  description: z.string().max(500).nullable().optional(),
-  status: eventStatusSchema.optional(),
-  handshakeContext: z.record(z.unknown()).optional(),
-  businessRationale: z.record(z.unknown()).nullable().optional(),
-  producerMetadata: z.record(z.unknown()).nullable().optional(),
-});
+/**
+ * Filter condition used in event-type journey steps.
+ * Allows a step to only trigger when the event payload matches
+ * certain criteria (e.g. "currency equals USD").
+ *
+ * Lovable can assume:
+ *   - `property` is one of the event's `properties`
+ *   - `operator` / `value` are always present together
+ */
+export interface EventFilterCondition {
+  /** Name of the event property to filter on */
+  property: string;
 
-export type CreateApplicationEventInput = z.infer<typeof createApplicationEventSchema>;
-export type UpdateApplicationEventInput = z.infer<typeof updateApplicationEventSchema>;
+  operator: "equals" | "not_equals" | "contains" | "gt" | "lt" | "gte" | "lte";
 
-// ─── Flow Schemas ─────────────────────────────────────
-
-export const flowTypeSchema = z.enum(["HAPPY_FLOW", "UNHAPPY_FLOW"]);
-
-export const createFlowSchema = z.object({
-  name: z.string().min(1, "Flow name is required").max(200),
-  flowType: flowTypeSchema,
-  fileUrl: z.string().nullable().optional(),
-  figmaLink: z.string().nullable().optional(),
-});
-
-export type CreateFlowInput = z.infer<typeof createFlowSchema>;
-
-// ─── Domain Schemas ───────────────────────────────────
-
-export const createDomainSchema = z.object({
-  name: z.string().min(1, "Domain name is required").max(200),
-  description: z.string().max(1000).optional(),
-  selectedServiceId: z.string().optional(),
-});
-
-export type CreateDomainInput = z.infer<typeof createDomainSchema>;
-
-// ─── Journey Step Schemas ─────────────────────────────
-
-export const stepKindSchema = z.enum([
-  "ACTION", "SYSTEM_TRIGGER", "COMMUNICATION", "STATE",
-  "DECISION", "WAIT_DELAY", "AB_SPLIT",
-]);
-
-export const createJourneyStepSchema = z.object({
-  name: z.string().max(200).optional(),
-  description: z.string().max(2000).optional(),
-  kind: stepKindSchema.optional(),
-  posX: z.number().optional(),
-  posY: z.number().optional(),
-  behavioralEventId: z.string().optional(),
-  applicationEventId: z.string().optional(),
-  communicationPointName: z.string().optional(),
-  triggerEvent: z.string().optional(),
-  insertAfterOrder: z.number().optional(),
-});
-
-export const updateJourneyStepSchema = z.object({
-  name: z.string().max(200).optional(),
-  description: z.string().max(2000).optional(),
-  kind: stepKindSchema.optional(),
-  order: z.number().optional(),
-  posX: z.number().optional(),
-  posY: z.number().optional(),
-  imageUrl: z.string().optional(),
-  behavioralEventId: z.string().optional(),
-  applicationEventId: z.string().optional(),
-  communicationPointName: z.string().optional(),
-  triggerEvent: z.string().optional(),
-  conditionConfig: z.record(z.unknown()).optional(),
-  waitDuration: z.string().optional(),
-  splitVariants: z.array(z.object({
-    name: z.string(),
-    percentage: z.number().min(0).max(100),
-  })).optional(),
-});
-
-export type CreateJourneyStepInput = z.infer<typeof createJourneyStepSchema>;
-export type UpdateJourneyStepInput = z.infer<typeof updateJourneyStepSchema>;
-
-// ─── Journey Edge Schema ──────────────────────────────
-
-export const createJourneyEdgeSchema = z.object({
-  sourceStepId: z.string().min(1),
-  targetStepId: z.string().min(1),
-  label: z.string().nullable().optional(),
-  condition: z.record(z.unknown()).optional(),
-  sortOrder: z.number().optional(),
-});
-
-export type CreateJourneyEdgeInput = z.infer<typeof createJourneyEdgeSchema>;
+  /** The comparison value — always serialized as a string */
+  value: string;
+}
