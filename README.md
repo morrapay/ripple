@@ -1,6 +1,76 @@
-# PM Internal Tool
+# Ripple
 
-Internal web tool for Product Managers to define events, map journeys, and plan customer communications for Braze. Aligned with the **Analytics Framework RFC** and the **Communication Policy Book**.
+Communication lifecycle management platform. Monorepo with contract-first architecture — frontend (Lovable) and backend (Cursor) communicate only through shared TypeScript contracts.
+
+## Architecture
+
+```
+/shared     ← Contracts (source of truth for both sides)
+/backend    ← Express API stub + legacy Next.js app
+/frontend   ← Lovable-generated Vite + React app
+```
+
+### Contracts (`/shared`)
+
+All API types live in `/shared/src/`:
+
+| File | What it defines |
+|------|----------------|
+| `events.schema.ts` | `Event`, `EventCategory`, `EventStatus`, `EventFilterCondition` |
+| `journey.schema.ts` | `Journey`, `JourneyStep` (discriminated union: event/delay/communication), `StepInput` |
+| `api.contract.ts` | Request/response shapes for all 6 endpoints, `PaginationParams`, `PaginatedResponse<T>` |
+| `errors.ts` | `ApiError` with typed `ErrorCode`, `ApiResponse<T>` wrapper |
+| `index.ts` | Barrel re-export |
+
+### API Stub Server
+
+Lightweight Express server that implements the contracts with in-memory storage. No database required.
+
+**Start it:**
+
+```bash
+npm run dev:backend     # from repo root — runs on http://localhost:3000
+```
+
+**Endpoints:**
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/journeys` | List journeys (paginated, filterable) |
+| `GET` | `/api/journeys/:id` | Get journey with steps |
+| `POST` | `/api/journeys` | Create journey |
+| `PUT` | `/api/journeys/:id` | Full update (replace steps) |
+| `DELETE` | `/api/journeys/:id` | Delete journey |
+| `GET` | `/api/events` | List event definitions (paginated) |
+| `GET` | `/api/health` | Health check |
+
+**Frontend integration:**
+
+```typescript
+// In Lovable, set the base URL:
+const API_BASE = "http://localhost:3000";
+
+// Import types from the contract — never define your own:
+import type { Journey, ListJourneysResponse, ApiError } from "@ripple/shared";
+
+const res = await fetch(`${API_BASE}/api/journeys`);
+const body: ListJourneysResponse = await res.json();
+// body.data is JourneySummary[], body.pagination has page/total info
+
+// Errors are always ApiError:
+if (!res.ok) {
+  const err: ApiError = await res.json();
+  console.error(err.code, err.message); // e.g. "NOT_FOUND", "Journey not found"
+}
+```
+
+CORS is enabled for `http://localhost:5173` (Lovable dev server).
+
+---
+
+## Legacy Full-Stack App (Next.js)
+
+The original full-featured Next.js app is still available under `/backend`:
 
 ## Tech Stack
 
@@ -8,7 +78,7 @@ Internal web tool for Product Managers to define events, map journeys, and plan 
 - **PostgreSQL** + **Prisma** ORM
 - **Zod** for validation
 
-## Quick Start
+## Quick Start (Legacy)
 
 ### 1. Prerequisites
 
