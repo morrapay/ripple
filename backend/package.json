@@ -6,7 +6,7 @@
     "dev:backend": "tsx --watch src/api-stub/index.ts",
     "dev": "WATCHPACK_WATCHER_LIMIT=20 next dev --hostname 127.0.0.1 -p 3005",
     "build:next": "prisma generate && next build",
-    "start:next": "next start -H 0.0.0.0 -p ${PORT:-3005}",
+    "start:next": "next start -H 0.0.0.0",
     "serve": "npm run build:next && npm run start:next",
     "restart": "lsof -ti :3005 | xargs kill -9 2>/dev/null; npm run start:next",
     "open": "open http://localhost:3005",

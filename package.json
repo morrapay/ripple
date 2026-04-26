@@ -17,9 +17,9 @@
     "build:frontend": "npm -w frontend run build",
     "build": "npm -w frontend run build",
     "render-build": "npm install --include=dev && npm -w frontend run build",
-    "render-build-next": "npm install --include=dev && npm -w backend run build:next",
+    "render-build-next": "npm install --include=dev && cd backend && npx prisma generate && npx next build",
     "start": "NODE_ENV=production tsx backend/src/api-stub/index.ts",
-    "start:next": "npm -w backend run start:next",
+    "start:next": "cd backend && npx next start -H 0.0.0.0",
     "lint": "npm -w backend run lint && npm -w frontend run lint",
     "typecheck": "npm -w shared run typecheck && npm -w backend run typecheck && npm -w frontend run typecheck"
   },
