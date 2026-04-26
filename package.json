@@ -6,17 +6,23 @@
     "frontend",
     "shared"
   ],
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev:backend": "npm -w backend run dev:backend",
     "dev:next": "npm -w backend run dev",
     "dev:frontend": "npm -w frontend run dev",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "build:shared": "npm -w shared run build",
-    "build:backend": "npm -w backend run build",
     "build:frontend": "npm -w frontend run build",
-    "build": "npm run build:shared && npm run build:backend && npm run build:frontend",
+    "build": "npm -w frontend run build",
+    "render-build": "npm install && npm -w frontend run build",
+    "start": "NODE_ENV=production tsx backend/src/api-stub/index.ts",
     "lint": "npm -w backend run lint && npm -w frontend run lint",
     "typecheck": "npm -w shared run typecheck && npm -w backend run typecheck && npm -w frontend run typecheck"
+  },
+  "dependencies": {
+    "tsx": "^4.19.2"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

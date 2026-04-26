@@ -5,9 +5,9 @@
   "scripts": {
     "dev:backend": "tsx --watch src/api-stub/index.ts",
     "dev": "WATCHPACK_WATCHER_LIMIT=20 next dev --hostname 127.0.0.1 -p 3005",
-    "build": "next build",
-    "start": "next start --hostname 127.0.0.1 -p 3005",
-    "serve": "npm run build && npm run start",
+    "build:next": "next build",
+    "start:next": "next start --hostname 127.0.0.1 -p 3005",
+    "serve": "npm run build:next && npm run start:next",
     "restart": "lsof -ti :3005 | xargs kill -9 2>/dev/null; npm run start",
     "open": "open http://localhost:3005",
     "lint": "next lint",

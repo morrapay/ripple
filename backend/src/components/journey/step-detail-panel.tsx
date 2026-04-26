@@ -497,40 +497,40 @@ export function StepDetailPanel({
             </div>
           </Field>
         )}
-      </div>
-
-      <div className="border-t border-[var(--card-border)] px-4 py-3 space-y-2">
-        <div className="flex gap-2">
+        {/* Action buttons inside scroll area */}
+        <div className="pt-2 space-y-2">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 px-3 py-2 rounded-md bg-[var(--accent)] text-white text-sm font-medium hover:bg-[var(--accent-muted)] disabled:opacity-50 transition-all"
+            >
+              {saving ? "Saving..." : "Save Changes"}
+            </button>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={deleting}
+              className="px-3 py-2 rounded-md border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 disabled:opacity-50 transition-all"
+            >
+              {deleting ? "..." : "Delete"}
+            </button>
+          </div>
           <button
             type="button"
-            onClick={handleSave}
-            disabled={saving}
-            className="flex-1 px-3 py-2 rounded-md bg-[var(--accent)] text-white text-sm font-medium hover:bg-[var(--accent-muted)] disabled:opacity-50 transition-all"
+            onClick={onSplit}
+            className="w-full px-3 py-2 rounded-md border border-zinc-700 text-zinc-400 text-sm hover:bg-zinc-800 hover:text-zinc-300 transition-all"
           >
-            {saving ? "Saving..." : "Save Changes"}
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={deleting}
-            className="px-3 py-2 rounded-md border border-red-500/30 text-red-400 text-sm hover:bg-red-500/10 disabled:opacity-50 transition-all"
-          >
-            {deleting ? "..." : "Delete"}
+            Split journey from here
           </button>
         </div>
-        <button
-          type="button"
-          onClick={onSplit}
-          className="w-full px-3 py-2 rounded-md border border-zinc-700 text-zinc-400 text-sm hover:bg-zinc-800 hover:text-zinc-300 transition-all"
-        >
-          Split journey from here
-        </button>
-      </div>
 
-      {/* Comments & Audit */}
-      <div className="border-t border-[var(--card-border)] px-4 py-3 space-y-3">
-        <AuditHistory domainId={domainId} entityType="STEP" entityId={step.id} />
-        <CommentsPanel domainId={domainId} entityType="STEP" entityId={step.id} />
+        {/* Comments & Audit */}
+        <div className="pt-2 border-t border-[var(--card-border)] space-y-3">
+          <AuditHistory domainId={domainId} entityType="STEP" entityId={step.id} />
+          <CommentsPanel domainId={domainId} entityType="STEP" entityId={step.id} />
+        </div>
       </div>
     </div>
   );

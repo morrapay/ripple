@@ -47,13 +47,12 @@ npm run dev:backend     # from repo root — runs on http://localhost:3000
 **Frontend integration:**
 
 ```typescript
-// In Lovable, set the base URL:
-const API_BASE = "http://localhost:3000";
+// Use relative URLs — works in dev (via Vite proxy) and production (same origin):
+const res = await fetch("/api/journeys");
 
 // Import types from the contract — never define your own:
 import type { Journey, ListJourneysResponse, ApiError } from "@ripple/shared";
 
-const res = await fetch(`${API_BASE}/api/journeys`);
 const body: ListJourneysResponse = await res.json();
 // body.data is JourneySummary[], body.pagination has page/total info
 
@@ -64,7 +63,67 @@ if (!res.ok) {
 }
 ```
 
-CORS is enabled for `http://localhost:5173` (Lovable dev server).
+CORS is enabled for `http://localhost:5173` (Lovable dev server) during local development. In production, frontend and backend are served from the same origin so CORS is not required.
+
+---
+
+## Quick Start (Deployed Mode)
+
+The entire app runs as a single process — the Express API stub serves both the API and the frontend build.
+
+### 1. Install
+
+```bash
+npm install
+```
+
+### 2. Build
+
+```bash
+npm run build
+```
+
+This builds the Vite frontend into `frontend/dist/`.
+
+### 3. Run
+
+```bash
+npm start
+```
+
+Opens on `http://localhost:3000` (or `$PORT` if set).
+
+### Deployment
+
+| Platform | How it works |
+|----------|-------------|
+| **Render** | Set build command to `npm install && npm run build`, start command to `npm start`. Auto-detects `PORT`. |
+| **Railway** | Same as Render. Set `PORT` env var if needed. |
+| **Fly.io** | Use the included `Procfile`. Run `fly launch`, then `fly deploy`. |
+| **Heroku** | Detects `Procfile` automatically. Set buildpack to `heroku/nodejs`. |
+| **Docker** | See `docker-compose.yml` for the full-stack setup with Postgres. |
+
+**Environment variables:**
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `PORT` | No | `3000` | Port the server listens on |
+| `NODE_ENV` | No | — | Set to `production` for deployed builds |
+
+The `Procfile` at the repo root contains: `web: npm start`
+
+---
+
+## Local Development
+
+Run the API stub and Vite dev server in parallel:
+
+```bash
+npm run dev
+```
+
+- Frontend: `http://localhost:5173` (hot-reloading, proxies `/api` to `:3000`)
+- Backend: `http://localhost:3000` (Express stub, auto-restarts on changes)
 
 ---
 
