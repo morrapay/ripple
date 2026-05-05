@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile } from "fs/promises";
-import { join } from "path";
+
+export const config = {
+  api: { bodyParser: false },
+};
+
+const MAX_SIZE_BYTES = 4 * 1024 * 1024; // 4 MB
 
 export async function POST(request: NextRequest) {
   try {
@@ -25,21 +29,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (file.size > MAX_SIZE_BYTES) {
+      return NextResponse.json(
+        { error: "Image must be under 4 MB. Try compressing it first." },
+        { status: 413 }
+      );
+    }
+
     const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const base64 = Buffer.from(bytes).toString("base64");
+    const dataUrl = `data:${file.type};base64,${base64}`;
 
-    const ext = file.name.split(".").pop()?.toLowerCase() ?? "png";
-    const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const uploadDir = join(process.cwd(), "public", "uploads");
-    const filepath = join(uploadDir, filename);
-
-    await writeFile(filepath, buffer);
-
-    return NextResponse.json({ url: `/uploads/${filename}` });
+    return NextResponse.json({ url: dataUrl });
   } catch (err) {
     console.error("Upload error:", err);
     return NextResponse.json(
-      { error: "Failed to upload file" },
+      { error: "Failed to process file" },
       { status: 500 }
     );
   }
