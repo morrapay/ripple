@@ -18,6 +18,13 @@ import { AuditHistory } from "./audit-history";
 import { CommentsPanel } from "./comments-panel";
 import type { SuggestedContent } from "@/lib/ai/content-suggester";
 import { validateContent } from "@/lib/services/content-validator";
+import {
+  AudienceCriteriaBuilder,
+  emptyAudienceCriteria,
+  serializeAudience,
+  deserializeAudience,
+  type AudienceCriteria,
+} from "./audience-criteria-builder";
 
 type CommunicationStatus = "DRAFT" | "ACTIVE" | "PAUSED" | "DEPRECATED" | "READY_FOR_BRAZE";
 
@@ -37,6 +44,8 @@ interface Communication {
   contentApprovedBy: string | null;
   contentApprovedAt: string | null;
   owner: string | null;
+  audienceCriteria: unknown[] | null;
+  audienceCustom: string | null;
   communicationPoint: { id: string; name: string; triggerEvent: string | null } | null;
   template: { id: string; channel: string; name: string } | null;
   contentOutline: SuggestedContent | null;
@@ -333,7 +342,7 @@ function DetailDrawer({
   onClose: () => void;
   onUpdate: (c: Communication) => void;
 }) {
-  const [tab, setTab] = useState<"overview" | "content">("overview");
+  const [tab, setTab] = useState<"overview" | "content" | "audience">("overview");
   const [saving, setSaving] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [channel, setChannel] = useState(comm.channel ?? "");
@@ -343,6 +352,10 @@ function DetailDrawer({
   const [status, setStatus] = useState<CommunicationStatus>(comm.status);
   const [content, setContent] = useState<SuggestedContent | null>(comm.contentOutline as SuggestedContent | null);
   const [suggesting, setSuggesting] = useState(false);
+  const [audience, setAudience] = useState<AudienceCriteria>(() =>
+    deserializeAudience({ audienceCriteria: comm.audienceCriteria, audienceCustom: comm.audienceCustom })
+  );
+  const [savingAudience, setSavingAudience] = useState(false);
 
   useEffect(() => {
     setChannel(comm.channel ?? "");
@@ -351,6 +364,7 @@ function DetailDrawer({
     setPrefGroup(comm.preferenceGroup ?? "");
     setStatus(comm.status);
     setContent(comm.contentOutline as SuggestedContent | null);
+    setAudience(deserializeAudience({ audienceCriteria: comm.audienceCriteria, audienceCustom: comm.audienceCustom }));
   }, [comm.id]);
 
   async function save(extra?: Record<string, unknown>) {
@@ -401,9 +415,27 @@ function DetailDrawer({
     }
   }
 
+  async function saveAudience() {
+    setSavingAudience(true);
+    try {
+      const res = await fetch(`/api/domains/${domainId}/communications/${comm.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(serializeAudience(audience)),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        onUpdate(data.communication);
+      }
+    } finally {
+      setSavingAudience(false);
+    }
+  }
+
   const tabs = [
     { id: "overview" as const, label: "Classification" },
     { id: "content" as const, label: "Content" },
+    { id: "audience" as const, label: "Audience" },
   ];
 
   const filteredCategories = commType
@@ -584,6 +616,20 @@ function DetailDrawer({
                   )}
                 </div>
               )}
+            </div>
+          )}
+
+          {tab === "audience" && (
+            <div className="space-y-5">
+              <p className="text-xs text-zinc-500">Define who should receive this communication. Rules are combined with AND logic.</p>
+              <AudienceCriteriaBuilder value={audience} onChange={setAudience} />
+              <button
+                onClick={saveAudience}
+                disabled={savingAudience}
+                className="w-full py-2 rounded-md bg-[var(--accent)] text-white text-sm font-medium hover:bg-[var(--accent-muted)] disabled:opacity-50 transition-colors"
+              >
+                {savingAudience ? "Saving..." : "Save Audience"}
+              </button>
             </div>
           )}
 
@@ -795,6 +841,7 @@ function SetupModal({
   const [commType, setCommType] = useState<CommType | "">("");
   const [category, setCategory] = useState("");
   const [prefGroup, setPrefGroup] = useState("");
+  const [audience, setAudience] = useState<AudienceCriteria>(emptyAudienceCriteria);
   const [creating, setCreating] = useState(false);
 
   const filteredCategories = commType
@@ -814,6 +861,7 @@ function SetupModal({
           communicationType: commType || null,
           category: category || null,
           preferenceGroup: prefGroup || null,
+          ...serializeAudience(audience),
         }),
       });
       if (res.ok) onCreated();
@@ -892,6 +940,11 @@ function SetupModal({
               ))}
             </select>
           </Field>
+
+          <div className="pt-1 border-t border-zinc-800">
+            <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-3">Audience</p>
+            <AudienceCriteriaBuilder value={audience} onChange={setAudience} compact />
+          </div>
         </div>
 
         <div className="px-5 py-4 border-t border-zinc-800 flex gap-2">
@@ -925,6 +978,7 @@ function AddCommunicationModal({
   const [commType, setCommType] = useState<CommType | "">("");
   const [category, setCategory] = useState("");
   const [prefGroup, setPrefGroup] = useState("");
+  const [audience, setAudience] = useState<AudienceCriteria>(emptyAudienceCriteria);
   const [creating, setCreating] = useState(false);
 
   const filteredCategories = commType
@@ -943,6 +997,7 @@ function AddCommunicationModal({
           communicationType: commType || null,
           category: category || null,
           preferenceGroup: prefGroup || null,
+          ...serializeAudience(audience),
         }),
       });
       if (res.ok) onCreated();
@@ -955,10 +1010,10 @@ function AddCommunicationModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60" />
       <div
-        className="relative w-full max-w-md rounded-xl border border-[var(--card-border)] bg-[var(--card)] shadow-2xl"
+        className="relative w-full max-w-lg rounded-xl border border-[var(--card-border)] bg-[var(--card)] shadow-2xl max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-4 border-b border-zinc-800">
+        <div className="px-5 py-4 border-b border-zinc-800 sticky top-0 bg-[var(--card)] z-10">
           <h3 className="text-base font-medium text-zinc-100">Add Communication</h3>
           <p className="text-xs text-zinc-500 mt-0.5">Create a new communication manually</p>
         </div>
@@ -1018,9 +1073,14 @@ function AddCommunicationModal({
               ))}
             </select>
           </Field>
+
+          <div className="pt-1 border-t border-zinc-800">
+            <p className="text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-3">Audience</p>
+            <AudienceCriteriaBuilder value={audience} onChange={setAudience} compact />
+          </div>
         </div>
 
-        <div className="px-5 py-4 border-t border-zinc-800 flex gap-2">
+        <div className="px-5 py-4 border-t border-zinc-800 flex gap-2 sticky bottom-0 bg-[var(--card)]">
           <button onClick={onClose} className="flex-1 py-2 rounded-md border border-zinc-700 text-zinc-400 text-sm hover:bg-zinc-800 transition-colors">
             Cancel
           </button>

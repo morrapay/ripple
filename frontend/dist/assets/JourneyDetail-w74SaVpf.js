@@ -1,0 +1,1 @@
+import{u as t,j as e}from"./index-CeXxmxDN.js";function a(){const{journeyId:s}=t();return e.jsxs("div",{className:"text-zinc-100",children:[e.jsxs("h1",{className:"text-xl font-bold",children:["Journey: ",s]}),e.jsx("p",{className:"text-zinc-500 mt-2",children:"Migration pending"})]})}export{a as default};

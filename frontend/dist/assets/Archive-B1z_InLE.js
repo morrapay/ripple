@@ -1,0 +1,1 @@
+import{j as e}from"./index-DLtySpPd.js";function i(){return e.jsxs("div",{className:"text-zinc-100",children:[e.jsx("h1",{className:"text-xl font-bold",children:"Archive"}),e.jsx("p",{className:"text-zinc-500 mt-2",children:"Migration pending"})]})}export{i as default};

@@ -61,6 +61,8 @@ export async function PATCH(
       owner: body.owner,
       status: body.status,
       contentOutline: body.contentOutline,
+      audienceCriteria: body.audienceCriteria,
+      audienceCustom: body.audienceCustom,
     });
     if (!communication) {
       return NextResponse.json(

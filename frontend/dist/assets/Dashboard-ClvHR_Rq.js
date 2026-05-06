@@ -1,0 +1,1 @@
+import{j as s}from"./index-C5XMc4lq.js";function a(){return s.jsxs("div",{className:"text-zinc-100",children:[s.jsx("h1",{className:"text-xl font-bold",children:"Dashboard"}),s.jsx("p",{className:"text-zinc-500 mt-2",children:"Migration pending"})]})}export{a as default};

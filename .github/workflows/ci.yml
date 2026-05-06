@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint-and-typecheck:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        workspace: [shared, backend, frontend]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install workspace dependencies
+        run: npm ci -w ${{ matrix.workspace }}
+
+      - name: Generate Prisma client
+        if: matrix.workspace == 'backend'
+        run: npx prisma generate
+        working-directory: backend
+
+      - name: Type check
+        run: npm run typecheck -w ${{ matrix.workspace }}
+
+  build-backend:
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm ci -w backend
+      - run: npx prisma generate
+        working-directory: backend
+      - run: npm run build -w backend
+
+  build-frontend:
+    runs-on: ubuntu-latest
+    needs: lint-and-typecheck
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm ci -w frontend
+      - run: npm run build -w frontend

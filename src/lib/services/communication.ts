@@ -20,6 +20,12 @@ export interface ListCommunicationsInput {
 
 export type CommunicationType = "PROMOTIONAL" | "TRANSACTIONAL" | "OPERATIONAL";
 
+export interface AudienceRule {
+  field: string;
+  operator: "is" | "is not" | "in" | "not in";
+  value: string | string[];
+}
+
 export interface CreateCommunicationInput {
   name: string;
   description?: string;
@@ -32,6 +38,8 @@ export interface CreateCommunicationInput {
   tags?: string[];
   owner?: string;
   status?: CommunicationStatus;
+  audienceCriteria?: AudienceRule[];
+  audienceCustom?: string;
 }
 
 export interface UpdateCommunicationInput {
@@ -47,6 +55,8 @@ export interface UpdateCommunicationInput {
   owner?: string;
   status?: CommunicationStatus;
   contentOutline?: object;
+  audienceCriteria?: AudienceRule[] | null;
+  audienceCustom?: string | null;
 }
 
 export async function listCommunications(input: ListCommunicationsInput) {
@@ -158,6 +168,8 @@ export async function createCommunication(
       tags: input.tags ?? [],
       owner: input.owner ?? null,
       status: (input.status ?? "DRAFT") as "DRAFT" | "ACTIVE" | "PAUSED" | "DEPRECATED" | "READY_FOR_BRAZE",
+      audienceCriteria: input.audienceCriteria ? (input.audienceCriteria as object[]) : undefined,
+      audienceCustom: input.audienceCustom ?? null,
     },
     include: {
       domain: { select: { id: true, name: true } },
@@ -196,6 +208,10 @@ export async function updateCommunication(
       ...(input.contentOutline !== undefined && {
         contentOutline: input.contentOutline as object,
       }),
+      ...(input.audienceCriteria !== undefined && {
+        audienceCriteria: input.audienceCriteria as object[] | null,
+      }),
+      ...(input.audienceCustom !== undefined && { audienceCustom: input.audienceCustom }),
     },
     include: {
       domain: { select: { id: true, name: true } },

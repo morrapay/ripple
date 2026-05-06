@@ -1,0 +1,1 @@
+import{j as e}from"./index-CeXxmxDN.js";function t(){return e.jsxs("div",{className:"text-zinc-100",children:[e.jsx("h1",{className:"text-xl font-bold",children:"Governance"}),e.jsx("p",{className:"text-zinc-500 mt-2",children:"Migration pending"})]})}export{t as default};

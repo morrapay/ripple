@@ -79,6 +79,8 @@ export async function POST(
       tags: body.tags ?? [],
       owner: body.owner,
       status: body.status,
+      audienceCriteria: body.audienceCriteria,
+      audienceCustom: body.audienceCustom,
     });
 
     await logAudit({

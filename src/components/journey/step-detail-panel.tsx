@@ -1,9 +1,21 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type { StepKind } from "./journey-node";
 import { AuditHistory } from "../audit-history";
 import { CommentsPanel } from "../comments-panel";
+import {
+  AudienceCriteriaBuilder,
+  emptyAudienceCriteria,
+  serializeAudience,
+  deserializeAudience,
+  type AudienceCriteria,
+} from "../audience-criteria-builder";
+import {
+  COMMUNICATION_TYPES,
+  CHANNEL_OPTIONS,
+  type CommType,
+} from "@/lib/communication-constants";
 
 interface BehavioralEvent {
   id: string;
@@ -383,6 +395,13 @@ export function StepDetailPanel({
                 className="w-full px-3 py-2 rounded-md border border-zinc-700 bg-zinc-900 text-sm text-zinc-200 focus:border-[var(--accent)] focus:outline-none transition-colors"
               />
             </Field>
+
+            {step.communicationPoints[0] && (
+              <LinkedCommEditor
+                domainId={domainId}
+                communicationPointId={step.communicationPoints[0].id}
+              />
+            )}
           </>
         )}
 
@@ -532,6 +551,185 @@ export function StepDetailPanel({
         <AuditHistory domainId={domainId} entityType="STEP" entityId={step.id} />
         <CommentsPanel domainId={domainId} entityType="STEP" entityId={step.id} />
       </div>
+    </div>
+  );
+}
+
+/* ─── Inline Communication Editor ─── */
+
+interface LinkedComm {
+  id: string;
+  channel: string | null;
+  communicationType: CommType | null;
+  audienceCriteria: unknown[] | null;
+  audienceCustom: string | null;
+}
+
+function LinkedCommEditor({
+  domainId,
+  communicationPointId,
+}: {
+  domainId: string;
+  communicationPointId: string;
+}) {
+  const [comm, setComm] = useState<LinkedComm | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [channel, setChannel] = useState("");
+  const [commType, setCommType] = useState<CommType | "">("");
+  const [audience, setAudience] = useState<AudienceCriteria>(emptyAudienceCriteria);
+  const [saving, setSaving] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+
+  const fetchComm = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/domains/${domainId}/communications`);
+      if (!res.ok) return;
+      const data = await res.json();
+      const found: (LinkedComm & { communicationPoint?: { id: string } | null }) | undefined =
+        data.communications?.find(
+          (c: { communicationPoint?: { id: string } | null }) =>
+            c.communicationPoint?.id === communicationPointId
+        );
+      if (found) {
+        setComm(found);
+        setChannel(found.channel ?? "");
+        setCommType(found.communicationType ?? "");
+        setAudience(
+          deserializeAudience({
+            audienceCriteria: found.audienceCriteria,
+            audienceCustom: found.audienceCustom,
+          })
+        );
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [domainId, communicationPointId]);
+
+  useEffect(() => { fetchComm(); }, [fetchComm]);
+
+  async function saveComm() {
+    if (!comm) return;
+    setSaving(true);
+    try {
+      await fetch(`/api/domains/${domainId}/communications/${comm.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channel: channel || null,
+          communicationType: commType || null,
+          ...serializeAudience(audience),
+        }),
+      });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="mt-2 text-xs text-zinc-600 italic">Loading communication details…</div>
+    );
+  }
+
+  if (!comm) {
+    return (
+      <div className="mt-2 text-xs text-zinc-600 italic">
+        Save the step first to configure communication details.
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-1 rounded-lg border border-violet-500/20 bg-violet-950/10">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center justify-between px-3 py-2.5 text-left"
+      >
+        <span className="text-[11px] font-medium text-violet-300 uppercase tracking-wider">
+          Communication Details
+        </span>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          className={`text-zinc-500 transition-transform ${expanded ? "rotate-180" : ""}`}
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+
+      {expanded && (
+        <div className="px-3 pb-3 space-y-3 border-t border-violet-500/10 pt-3">
+          <div>
+            <label className="block text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1.5">
+              Channel
+            </label>
+            <div className="grid grid-cols-3 gap-1">
+              {CHANNEL_OPTIONS.slice(0, 6).map((ch) => (
+                <button
+                  key={ch.value}
+                  type="button"
+                  onClick={() => setChannel(ch.value)}
+                  className={`flex flex-col items-center gap-0.5 px-1 py-1.5 rounded-md border text-[9px] transition-all ${
+                    channel === ch.value
+                      ? "border-[var(--accent)] bg-[var(--accent)]/10 text-[var(--accent)]"
+                      : "border-zinc-700 text-zinc-500 hover:border-zinc-600"
+                  }`}
+                >
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d={ch.icon} />
+                  </svg>
+                  <span>{ch.label}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1.5">
+              Type
+            </label>
+            <div className="grid grid-cols-3 gap-1">
+              {COMMUNICATION_TYPES.map((t) => (
+                <button
+                  key={t.value}
+                  type="button"
+                  onClick={() => setCommType(t.value)}
+                  className={`px-1.5 py-1.5 rounded-md border text-[9px] text-center transition-all ${
+                    commType === t.value
+                      ? t.color + " font-medium"
+                      : "border-zinc-700 text-zinc-500 hover:border-zinc-600"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-medium text-zinc-500 uppercase tracking-wider mb-1.5">
+              Audience
+            </label>
+            <AudienceCriteriaBuilder value={audience} onChange={setAudience} compact />
+          </div>
+
+          <button
+            type="button"
+            onClick={saveComm}
+            disabled={saving}
+            className="w-full py-1.5 rounded-md bg-violet-600 text-white text-xs font-medium hover:bg-violet-500 disabled:opacity-50 transition-colors"
+          >
+            {saving ? "Saving…" : "Save Communication"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
